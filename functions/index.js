@@ -495,24 +495,41 @@ exports.clientRequestForm = functions.https.onRequest((req, res) => {
       }
 
       const input = req.body?.request || {}
+      const requestedPackages = Array.isArray(input.colis)
+        ? input.colis.slice(0, 30).map(item => ({
+          nom: String(item?.nom || "").trim().slice(0, 160),
+          quantite: Math.max(1, Math.min(999, Number(item?.quantite || 1)))
+        })).filter(item => item.nom)
+        : []
       const requestData = {
         entrepriseId: invite.entrepriseId,
         inviteToken: token,
-        clientNom: String(input.clientNom || invite.name || "").trim().slice(0, 120),
-        clientTelephone: normalizePhone(input.clientTelephone || invite.phone),
+        clientNom: String(input.expediteur || input.clientNom || invite.name || "").trim().slice(0, 120),
+        clientTelephone: normalizePhone(input.telephoneExpediteur || input.clientTelephone || invite.phone),
         adresseEnlevement: String(input.adresseEnlevement || invite.address || "").trim().slice(0, 300),
         destinataire: String(input.destinataire || "").trim().slice(0, 120),
         telephoneDestinataire: normalizePhone(input.telephoneDestinataire),
         destination: "Cameroun",
         typeDeFret: input.typeDeFret === "Aérien" ? "Aérien" : "Maritime",
-        descriptionColis: String(input.descriptionColis || "").trim().slice(0, 500),
-        nombreDeColis: Math.max(1, Math.min(999, Number(input.nombreDeColis || 1))),
+        personneEnCharge: input.typeDeFret === "Aérien"
+          ? String(input.personneEnCharge || "").trim().slice(0, 120)
+          : "",
+        telephoneAgent: input.typeDeFret === "Aérien"
+          ? normalizePhone(input.telephoneAgent)
+          : "",
+        poidsTotal: input.typeDeFret === "Aérien"
+          ? Math.max(0, Number(input.poidsTotal || 0))
+          : 0,
+        colis: requestedPackages,
+        descriptionColis: requestedPackages.map(item => item.quantite + " × " + item.nom).join(", ").slice(0, 500),
+        nombreDeColis: requestedPackages.reduce((total, item) => total + item.quantite, 0),
         notes: String(input.notes || "").trim().slice(0, 1000),
         status: "pending",
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       }
 
-      if (!requestData.clientNom || !requestData.clientTelephone || !requestData.adresseEnlevement || !requestData.descriptionColis) {
+      if (!requestData.clientNom || !requestData.clientTelephone || !requestData.adresseEnlevement
+        || !requestData.destinataire || !requestData.telephoneDestinataire || !requestData.colis.length) {
         return res.status(400).json({ success: false, error: "Veuillez remplir les champs obligatoires" })
       }
 

@@ -9,5 +9,7 @@ functions/.env.*
 firebase-debug.log
 firebase-debug.*.log
 *.log
+.DS_Store
+**/.DS_Store
 .env.local
 .env.*.local
