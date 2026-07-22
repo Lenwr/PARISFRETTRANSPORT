@@ -1,0 +1,215 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasUserDoc() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userEntrepriseId() {
+      return hasUserDoc() ? userDoc().data.entrepriseId : null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && (
+          request.auth.token.superAdmin == true
+          || (
+            hasUserDoc()
+            && (
+              userDoc().data.role == "superAdmin"
+              || userDoc().data.role == "superadmin"
+              || userDoc().data.role == "super_admin"
+              || userDoc().data.isSuperAdmin == true
+              || userDoc().data.superAdmin == true
+            )
+          )
+        );
+    }
+
+    function isSameEntreprise() {
+      return isSignedIn()
+        && resource.data.entrepriseId == userEntrepriseId();
+    }
+
+    function isCreatingForSameEntreprise() {
+      return isSignedIn()
+        && request.resource.data.entrepriseId == userEntrepriseId();
+    }
+
+    function canReadOrWriteEntrepriseResource() {
+      return isSameEntreprise() || isSuperAdmin();
+    }
+
+    function canCreateEntrepriseResource() {
+      return isCreatingForSameEntreprise() || isSuperAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn()
+        && (
+          request.auth.uid == userId
+          || resource.data.entrepriseId == userEntrepriseId()
+          || isSuperAdmin()
+        );
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /destinations/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /entreprises/{entrepriseId} {
+      allow read: if isSignedIn()
+        && (
+          resource.data.createdBy == request.auth.uid
+          || request.auth.uid in resource.data.users
+          || entrepriseId == userEntrepriseId()
+          || isSuperAdmin()
+        );
+
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && (
+          isSuperAdmin()
+          || (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(["features"])
+            && (
+              resource.data.createdBy == request.auth.uid
+              || request.auth.uid in resource.data.users
+              || entrepriseId == userEntrepriseId()
+            )
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /customers/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /catalogueArticles/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /clientRequests/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if false;
+    }
+
+    match /clientRequestInvites/{docId} {
+      allow read: if canReadOrWriteEntrepriseResource();
+      allow write: if false;
+    }
+
+    match /payments/{docId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /invitations/{docId} {
+      allow read: if isSignedIn()
+        && (
+          resource.data.entrepriseId == userEntrepriseId()
+          || resource.data.email == request.auth.token.email
+        );
+
+      allow create: if isCreatingForSameEntreprise();
+
+      allow update: if isSignedIn()
+        && (
+          resource.data.entrepriseId == userEntrepriseId()
+          || (
+            resource.data.email == request.auth.token.email
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.entrepriseId == resource.data.entrepriseId
+          )
+        );
+
+      allow delete: if canReadOrWriteEntrepriseResource();
+    }
+
+    match /chargements/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /enlevements/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /publicTrackings/{docId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isCreatingForSameEntreprise();
+      allow update, delete: if canReadOrWriteEntrepriseResource();
+    }
+
+    match /colis/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /boxes/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /tasks/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /dailyTasks/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /events/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /messages/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /smsCampaigns/{docId} {
+      allow read: if canReadOrWriteEntrepriseResource();
+      allow create, update, delete: if false;
+    }
+
+    match /volumeQuotes/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /company/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

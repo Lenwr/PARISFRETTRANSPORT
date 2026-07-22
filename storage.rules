@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isImageUnder(maxBytes) {
+      return request.resource != null
+        && request.resource.size <= maxBytes
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /entreprises/paris-fret/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isImageUnder(2 * 1024 * 1024);
+      allow delete: if isSignedIn();
+    }
+
+    match /enlevements_images/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isImageUnder(10 * 1024 * 1024);
+      allow delete: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pf-bg: #f7f8f6;
+  --pf-surface: rgba(255, 255, 255, 0.86);
+  --pf-surface-solid: #ffffff;
+  --pf-ink: #101816;
+  --pf-muted: #68736f;
+  --pf-line: rgba(16, 24, 22, 0.09);
+  --pf-accent: #0f766e;
+  --pf-accent-strong: #0b5f58;
+  --pf-sidebar: #0d1715;
+  --pf-radius: 22px;
+  --pf-shadow: 0 22px 70px rgba(15, 23, 42, 0.08);
+}
+
+html {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(15, 118, 110, 0.08), transparent 32rem),
+    linear-gradient(180deg, #fbfcfb 0%, var(--pf-bg) 48%, #f4f6f3 100%);
+}
+
+body {
+  min-height: 100vh;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 86% 12%, rgba(15, 118, 110, 0.08), transparent 28rem),
+    linear-gradient(180deg, #fbfcfb 0%, var(--pf-bg) 50%, #f4f6f3 100%);
+  color: var(--pf-ink);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: geometricPrecision;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 118, 110, 0.24) transparent;
+}
+
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.24);
+}
+
+::selection {
+  background: rgba(15, 118, 110, 0.16);
+}
+
+@layer base {
+  h1 {
+    letter-spacing: -0.045em;
+  }
+
+  h2,
+  h3 {
+    letter-spacing: -0.028em;
+  }
+}
+
+@layer components {
+  .btn,
+  .input,
+  .select,
+  .textarea {
+    min-height: 3rem;
+    border-radius: 14px;
+  }
+
+  .input,
+  .select,
+  .textarea {
+    border-color: var(--pf-line);
+    background: rgba(255, 255, 255, 0.86);
+    color: var(--pf-ink);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background 160ms ease,
+      transform 160ms ease;
+  }
+
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    border-color: rgba(15, 118, 110, 0.48);
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.1);
+    outline: none;
+  }
+
+  .btn {
+    border-radius: 14px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      background 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    border-color: var(--pf-accent);
+    background: var(--pf-accent);
+    color: white;
+    box-shadow: 0 12px 28px rgba(15, 118, 110, 0.18);
+  }
+
+  .btn-primary:hover {
+    border-color: var(--pf-accent-strong);
+    background: var(--pf-accent-strong);
+    box-shadow: 0 16px 34px rgba(15, 118, 110, 0.22);
+  }
+
+  .rounded-3xl {
+    border-radius: var(--pf-radius);
+  }
+
+  .shadow-sm,
+  .shadow,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: var(--pf-shadow);
+  }
+
+  .bg-slate-50,
+  .bg-slate-100 {
+    background-color: transparent;
+  }
+
+  .bg-white {
+    background: var(--pf-surface-solid);
+  }
+
+  .border-slate-200 {
+    border-color: var(--pf-line);
+  }
+
+  .text-slate-950,
+  .text-slate-900 {
+    color: var(--pf-ink);
+  }
+
+  .text-slate-500,
+  .text-slate-600 {
+    color: var(--pf-muted);
+  }
+
+  .text-primary {
+    color: var(--pf-accent);
+  }
+
+  .bg-primary {
+    background-color: var(--pf-accent);
+  }
+
+  .border-primary {
+    border-color: var(--pf-accent);
+  }
+
+  .hover\:bg-primary\/90:hover {
+    background-color: var(--pf-accent-strong);
+  }
+
+  .menu :where(li > *) {
+    border-radius: 12px;
+  }
+}
+
+@layer utilities {
+  .pf-glass {
+    border: 1px solid var(--pf-line);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: var(--pf-shadow);
+    backdrop-filter: blur(24px);
+  }
+}
+
+.loading {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+  background-color: currentColor;
+}
+
+.loading-xs {
+  width: 1rem;
+  height: 1rem;
+}
+
+.loading-sm {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.loading-md {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.loading-lg {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.loading-spinner {
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
