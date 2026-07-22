@@ -9,6 +9,8 @@ const router = useRouter()
 const loading = ref(true)
 const sending = ref(false)
 const error = ref("")
+const company = ref({ name: "Paris Fret Transport", logoUrl: "/images/logo.png" })
+const catalogue = ref([])
 const endpoint = "https://us-central1-" + firebaseApp.options.projectId + ".cloudfunctions.net/clientRequestForm"
 const form = ref({
   expediteur: "",
@@ -40,6 +42,11 @@ onMounted(async () => {
     const data = await response.json()
     if (!response.ok) throw new Error(data.error)
     if (data.invite.submitted) return router.replace({ name: "request-thank-you" })
+    company.value = {
+      name: data.entreprise?.name || "Paris Fret Transport",
+      logoUrl: data.entreprise?.logoUrl || "/images/logo.png"
+    }
+    catalogue.value = Array.isArray(data.catalogue) ? data.catalogue : []
     form.value.expediteur = data.invite.name || ""
     form.value.telephoneExpediteur = data.invite.phone || ""
     form.value.adresseEnlevement = data.invite.address || ""
@@ -77,8 +84,8 @@ async function submit() {
   <main class="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:py-12">
     <div class="mx-auto max-w-4xl">
       <div class="mb-8 flex items-center gap-4">
-        <img src="/images/logo.png" class="h-16 w-16 rounded-2xl object-contain" alt="Paris Fret Transport" />
-        <div><p class="text-xl font-black">Paris Fret Transport</p><p class="text-sm text-slate-500">Envoi de colis vers le Cameroun</p></div>
+        <img :src="company.logoUrl" class="h-16 w-16 rounded-2xl object-contain" :alt="company.name" />
+        <div><p class="text-xl font-black">{{ company.name }}</p><p class="text-sm text-slate-500">Envoi de colis vers le Cameroun</p></div>
       </div>
 
       <div v-if="loading" class="rounded-3xl bg-white p-10 text-center">Chargement…</div>
@@ -88,6 +95,11 @@ async function submit() {
       </div>
 
       <form v-else class="space-y-6" @submit.prevent="submit">
+        <datalist id="public-catalogue-articles">
+          <option v-for="article in catalogue" :key="article.nom" :value="article.nom">
+            {{ article.categorie }}<template v-if="article.unite"> · {{ article.unite }}</template>
+          </option>
+        </datalist>
         <header class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
           <p class="text-xs font-black uppercase tracking-[0.2em] text-primary">Nouveau colis</p>
           <h1 class="mt-3 text-3xl font-black sm:text-4xl">Préparer votre envoi</h1>
@@ -122,7 +134,7 @@ async function submit() {
           <div class="flex items-center justify-between gap-4"><h2 class="text-xl font-black">Colis et articles</h2><button type="button" class="btn btn-sm rounded-xl bg-slate-950 text-white" @click="addPackage"><Plus class="h-4 w-4" /> Ajouter</button></div>
           <div class="mt-5 space-y-3">
             <div v-for="(item, index) in form.colis" :key="index" class="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-[1fr_130px_48px]">
-              <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Article</span><input v-model="item.nom" required class="input input-bordered w-full rounded-xl bg-white" placeholder="Ex. Carton de vêtements" /></label>
+              <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Article</span><input v-model="item.nom" required list="public-catalogue-articles" class="input input-bordered w-full rounded-xl bg-white" placeholder="Choisir ou écrire un article" /></label>
               <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Quantité</span><input v-model.number="item.quantite" required type="number" min="1" class="input input-bordered w-full rounded-xl bg-white" /></label>
               <button type="button" class="btn btn-square mt-auto rounded-xl bg-red-50 text-red-700" aria-label="Supprimer" @click="removePackage(index)"><Trash2 class="h-4 w-4" /></button>
             </div>

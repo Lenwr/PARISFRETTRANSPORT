@@ -475,6 +475,24 @@ exports.clientRequestForm = functions.https.onRequest((req, res) => {
       }
 
       if (req.method === "GET") {
+        const [entrepriseSnap, catalogueSnap] = await Promise.all([
+          db.collection("entreprises").doc(invite.entrepriseId).get(),
+          db.collection("catalogueArticles")
+            .where("entrepriseId", "==", invite.entrepriseId)
+            .get()
+        ])
+        const entreprise = entrepriseSnap.exists ? entrepriseSnap.data() : {}
+        const catalogue = catalogueSnap.docs
+          .map(item => item.data())
+          .filter(item => item.actif !== false && item.nom)
+          .sort((a, b) => Number(a.ordre || 100) - Number(b.ordre || 100)
+            || String(a.nom).localeCompare(String(b.nom)))
+          .map(item => ({
+            nom: String(item.nom || "").slice(0, 160),
+            categorie: String(item.categorie || "").slice(0, 80),
+            unite: String(item.unite || "").slice(0, 40)
+          }))
+
         return res.json({
           success: true,
           invite: {
@@ -482,7 +500,18 @@ exports.clientRequestForm = functions.https.onRequest((req, res) => {
             phone: invite.phone,
             address: invite.address,
             submitted: invite.status === "submitted"
-          }
+          },
+          entreprise: {
+            name: String(entreprise.nom || entreprise.companyName || "Paris Fret Transport").slice(0, 120),
+            logoUrl: String(
+              entreprise.logoUrl
+              || entreprise.logoURL
+              || entreprise.logo
+              || entreprise.imageUrl
+              || ""
+            ).slice(0, 1000)
+          },
+          catalogue
         })
       }
 

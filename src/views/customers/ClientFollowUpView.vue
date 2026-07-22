@@ -62,9 +62,26 @@ const filteredCustomers = computed(() => {
 })
 const filteredInvites = computed(() => {
   const term = historySearch.value.trim().toLocaleLowerCase("fr")
-  return [...(invites.value || [])]
+  const sorted = [...(invites.value || [])]
     .filter(item => !term || searchable(item.name, item.phone, item.address).includes(term))
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt))
+  const seenPhones = new Set()
+
+  return sorted.filter(item => {
+    const phone = String(item.phone || "").replace(/\D/g, "")
+    const key = phone || searchable(item.name, item.address)
+    if (seenPhones.has(key)) return false
+    seenPhones.add(key)
+    return true
+  })
+})
+const uniqueInviteCount = computed(() => {
+  const phones = new Set()
+  ;(invites.value || []).forEach(item => {
+    const phone = String(item.phone || "").replace(/\D/g, "")
+    phones.add(phone || searchable(item.name, item.address))
+  })
+  return phones.size
 })
 
 function timestampValue(value) {
@@ -221,7 +238,7 @@ async function sendForms() {
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div class="flex border-b border-slate-200 bg-slate-50 p-2">
         <button class="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black" :class="activeTab === 'customers' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'" @click="activeTab = 'customers'"><Users class="h-4 w-4" /> Clients enregistrés ({{ customers.length }})</button>
-        <button class="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black" :class="activeTab === 'history' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'" @click="activeTab = 'history'"><Send class="h-4 w-4" /> Derniers envois ({{ invites.length }})</button>
+        <button class="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black" :class="activeTab === 'history' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'" @click="activeTab = 'history'"><Send class="h-4 w-4" /> Derniers clients ({{ uniqueInviteCount }})</button>
       </div>
 
       <div v-if="activeTab === 'customers'" class="p-5">
