@@ -164,7 +164,7 @@ async function updateEntreprise() {
       const fileExtension = selectedLogoFile.value.name.split(".").pop()
       const logoRef = storageRef(
         storage,
-        `entreprises/${entrepriseId.value}/logo.${fileExtension}`
+        `entreprises/${entrepriseId.value}/logos/logo-${Date.now()}.${fileExtension}`
       )
 
       await uploadBytes(logoRef, selectedLogoFile.value)

@@ -17,8 +17,9 @@ async function imageUrlToBase64(url) {
   if (!url) return null
 
   try {
-    const source = new URL(url, window.location.origin).href
-    const response = await fetch(source)
+    const sourceUrl = new URL(url, window.location.origin)
+    sourceUrl.searchParams.set("_pdf", Date.now().toString())
+    const response = await fetch(sourceUrl.href, { cache: "no-store" })
     const blob = await response.blob()
 
     return await new Promise(resolve => {
@@ -51,6 +52,10 @@ async function imageUrlToBase64(url) {
     img.onerror = () => resolve(null)
     img.src = url
   })
+}
+
+function imageFormat(dataUrl) {
+  return String(dataUrl || "").startsWith("data:image/jpeg") ? "JPEG" : "PNG"
 }
 
 function drawField(pdf, label, value, x, y, width) {
@@ -114,7 +119,7 @@ export async function generateQrColisPdf(colis, { entreprise } = {}) {
       if (logoImage) {
         pdf.setFillColor(255, 255, 255)
         pdf.roundedRect(7, 4, 10, 10, 2, 2, "F")
-        pdf.addImage(logoImage, "PNG", 8.5, 5.5, 7, 7)
+        pdf.addImage(logoImage, imageFormat(logoImage), 8.5, 5.5, 7, 7)
       }
 
       pdf.setTextColor(255, 255, 255)

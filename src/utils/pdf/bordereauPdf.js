@@ -57,8 +57,9 @@ async function imageUrlToBase64(url) {
   if (!url) return null
 
   try {
-    const source = new URL(url, window.location.origin).href
-    const response = await fetch(source)
+    const sourceUrl = new URL(url, window.location.origin)
+    sourceUrl.searchParams.set("_pdf", Date.now().toString())
+    const response = await fetch(sourceUrl.href, { cache: "no-store" })
     const blob = await response.blob()
 
     return await new Promise(resolve => {
@@ -91,6 +92,10 @@ async function imageUrlToBase64(url) {
     img.onerror = () => resolve(null)
     img.src = url
   })
+}
+
+function imageFormat(dataUrl) {
+  return String(dataUrl || "").startsWith("data:image/jpeg") ? "JPEG" : "PNG"
 }
 
 function setColor(pdf, color, mode = "text") {
@@ -150,7 +155,7 @@ function drawHeader(pdf, { entreprise, logoImage }) {
     setColor(pdf, BORDER, "draw")
     pdf.setFillColor(255, 255, 255)
     pdf.roundedRect(MARGIN, 12, 23, 23, 4, 4, "FD")
-    pdf.addImage(logoImage, "PNG", MARGIN + 3, 15, 17, 17)
+    pdf.addImage(logoImage, imageFormat(logoImage), MARGIN + 3, 15, 17, 17)
   }
 
   pdf.setFont("helvetica", "bold")
