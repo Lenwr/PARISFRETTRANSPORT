@@ -34,6 +34,9 @@ const emptyArticle = () => ({
   nom: "",
   categorie: "Général",
   unite: "Pièce",
+  typeTarif: "fixe",
+  prixUnitaire: 0,
+  prixParM3: 0,
   ordre: 100,
   actif: true
 })
@@ -45,7 +48,7 @@ const filteredArticles = computed(() => {
   if (!term) return articles.value
 
   return articles.value.filter(article =>
-    `${article.nom} ${article.categorie} ${article.unite}`.toLowerCase().includes(term)
+    `${article.nom} ${article.categorie} ${article.unite} ${article.typeTarif}`.toLowerCase().includes(term)
   )
 })
 
@@ -80,6 +83,9 @@ function openEdit(article) {
     nom: article.nom || "",
     categorie: article.categorie || "Général",
     unite: article.unite || "Pièce",
+    typeTarif: article.typeTarif || "fixe",
+    prixUnitaire: Number(article.prixUnitaire || 0),
+    prixParM3: Number(article.prixParM3 || 0),
     ordre: Number(article.ordre || 100),
     actif: article.actif !== false
   }
@@ -99,6 +105,8 @@ async function saveArticle() {
   const payload = {
     ...form.value,
     nom,
+    prixUnitaire: Math.max(Number(form.value.prixUnitaire || 0), 0),
+    prixParM3: Math.max(Number(form.value.prixParM3 || 0), 0),
     ordre: Number(form.value.ordre || 100),
     entrepriseId: entrepriseId.value,
     updatedAt: serverTimestamp()
@@ -162,8 +170,8 @@ onMounted(fetchArticles)
     </label>
 
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="hidden grid-cols-[minmax(220px,1fr)_180px_140px_100px_190px] gap-4 border-b bg-slate-50 px-6 py-4 text-xs font-black uppercase text-slate-500 md:grid">
-        <span>Article</span><span>Catégorie</span><span>Unité</span><span>Actif</span><span>Actions</span>
+      <div class="hidden grid-cols-[minmax(190px,1fr)_140px_125px_150px_80px_170px] gap-4 border-b bg-slate-50 px-6 py-4 text-xs font-black uppercase text-slate-500 md:grid">
+        <span>Article</span><span>Catégorie</span><span>Unité</span><span>Tarification</span><span>Actif</span><span>Actions</span>
       </div>
 
       <p v-if="loading" class="p-8 text-center text-slate-500">Chargement…</p>
@@ -173,7 +181,7 @@ onMounted(fetchArticles)
         v-for="article in filteredArticles"
         v-else
         :key="article.id"
-        class="grid gap-3 border-b border-slate-100 px-6 py-5 last:border-0 md:grid-cols-[minmax(220px,1fr)_180px_140px_100px_190px] md:items-center"
+        class="grid gap-3 border-b border-slate-100 px-6 py-5 last:border-0 md:grid-cols-[minmax(190px,1fr)_140px_125px_150px_80px_170px] md:items-center"
       >
         <div>
           <p class="font-black text-slate-950">{{ article.nom }}</p>
@@ -181,6 +189,10 @@ onMounted(fetchArticles)
         </div>
         <span class="text-sm text-slate-600">{{ article.categorie }}</span>
         <span class="text-sm text-slate-600">{{ article.unite }}</span>
+        <div class="text-sm">
+          <p class="font-black text-slate-900">{{ article.typeTarif === "volume" ? "Au volume" : "Prix fixe" }}</p>
+          <p class="text-slate-500">{{ Number(article.typeTarif === "volume" ? article.prixParM3 : article.prixUnitaire || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) }}{{ article.typeTarif === "volume" ? " / m³" : "" }}</p>
+        </div>
         <button class="w-fit rounded-full px-3 py-1 text-xs font-black" :class="article.actif !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" @click="toggleArticle(article)">
           {{ article.actif !== false ? "OUI" : "NON" }}
         </button>
@@ -202,6 +214,9 @@ onMounted(fetchArticles)
           <label class="sm:col-span-2"><span class="mb-2 block text-sm font-bold">Nom</span><input v-model="form.nom" required class="input input-bordered w-full rounded-lg" placeholder="Ex. Télévision" /></label>
           <label><span class="mb-2 block text-sm font-bold">Catégorie</span><input v-model="form.categorie" class="input input-bordered w-full rounded-lg" placeholder="Général" /></label>
           <label><span class="mb-2 block text-sm font-bold">Unité</span><select v-model="form.unite" class="select select-bordered w-full rounded-lg"><option>Pièce</option><option>Carton</option><option>Kg</option><option>Lot</option><option>Pouce</option></select></label>
+          <label><span class="mb-2 block text-sm font-bold">Type de tarif</span><select v-model="form.typeTarif" class="select select-bordered w-full rounded-lg"><option value="fixe">Prix fixe par unité</option><option value="volume">Prix au m³</option></select></label>
+          <label v-if="form.typeTarif === 'fixe'"><span class="mb-2 block text-sm font-bold">Prix unitaire (€)</span><input v-model.number="form.prixUnitaire" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-lg" /></label>
+          <label v-else><span class="mb-2 block text-sm font-bold">Prix par m³ (€)</span><input v-model.number="form.prixParM3" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-lg" /></label>
           <label><span class="mb-2 block text-sm font-bold">Ordre</span><input v-model.number="form.ordre" type="number" class="input input-bordered w-full rounded-lg" /></label>
           <label class="flex items-center gap-3 pt-8"><input v-model="form.actif" type="checkbox" class="toggle toggle-primary" /><span class="font-bold">Article actif</span></label>
           <button type="submit" :disabled="saving" class="btn btn-primary mt-2 rounded-lg sm:col-span-2">{{ saving ? "Enregistrement…" : "Enregistrer" }}</button>

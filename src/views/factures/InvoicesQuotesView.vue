@@ -113,6 +113,15 @@ function currency(value) {
   }).format(Number(value || 0))
 }
 
+// Le PDF utilise une police standard : on évite les espaces insécables
+// d'Intl qui peuvent être affichées comme des caractères séparés.
+function pdfCurrency(value) {
+  const number = Number(value || 0)
+  const [integer, decimals] = number.toFixed(2).split(".")
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+  return `${grouped},${decimals} EUR`
+}
+
 function drawText(doc, text, x, y, options = {}) {
   doc.text(String(text || "-"), x, y, options)
 }
@@ -225,10 +234,10 @@ async function generateDocumentPdf() {
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   drawText(doc, "Désignation", 18, y + 7)
-  drawText(doc, "Qté", 110, y + 7)
+  drawText(doc, "Qté", 116, y + 7, { align: "right" })
   drawText(doc, "Unité", 126, y + 7)
-  drawText(doc, "PU HT", 148, y + 7)
-  drawText(doc, "Total HT", 174, y + 7)
+  drawText(doc, "PU HT", 166, y + 7, { align: "right" })
+  drawText(doc, "Total HT", 192, y + 7, { align: "right" })
 
   y += 14
   doc.setTextColor(15, 23, 42)
@@ -247,10 +256,12 @@ async function generateDocumentPdf() {
 
     const designation = String(line.designation || "-").slice(0, 52)
     drawText(doc, designation, 18, y + 2)
-    drawText(doc, line.quantity || 0, 112, y + 2)
+    drawText(doc, line.quantity || 0, 116, y + 2, { align: "right" })
     drawText(doc, line.unit || "-", 126, y + 2)
-    drawText(doc, currency(line.unitPrice), 148, y + 2)
-    drawText(doc, currency(lineTotal(line)), 191, y + 2, { align: "right" })
+    doc.setFontSize(8)
+    drawText(doc, pdfCurrency(line.unitPrice), 166, y + 2, { align: "right" })
+    drawText(doc, pdfCurrency(lineTotal(line)), 192, y + 2, { align: "right" })
+    doc.setFontSize(9)
     y += 10
   })
 
@@ -258,18 +269,18 @@ async function generateDocumentPdf() {
   const totalsX = 132
   doc.setFont("helvetica", "normal")
   drawText(doc, "Total HT", totalsX, y)
-  drawText(doc, currency(subtotal.value), 191, y, { align: "right" })
+  drawText(doc, pdfCurrency(subtotal.value), 192, y, { align: "right" })
   y += 7
   drawText(doc, documentForm.discountType === "percent" ? `Remise (${documentForm.discount || 0}%)` : "Remise", totalsX, y)
-  drawText(doc, currency(discountAmount.value), 191, y, { align: "right" })
+  drawText(doc, pdfCurrency(discountAmount.value), 192, y, { align: "right" })
   y += 7
   drawText(doc, `TVA (${documentForm.vatRate || 0}%)`, totalsX, y)
-  drawText(doc, currency(vatAmount.value), 191, y, { align: "right" })
+  drawText(doc, pdfCurrency(vatAmount.value), 192, y, { align: "right" })
   y += 9
   doc.setFont("helvetica", "bold")
   doc.setFontSize(13)
   drawText(doc, "Total TTC", totalsX, y)
-  drawText(doc, currency(totalTtc.value), 191, y, { align: "right" })
+  drawText(doc, pdfCurrency(totalTtc.value), 192, y, { align: "right" })
 
   y += 18
   drawSectionTitle(doc, "Conditions et notes", 14, y)

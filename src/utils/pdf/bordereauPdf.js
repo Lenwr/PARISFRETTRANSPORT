@@ -236,22 +236,10 @@ export async function generateBordereauPdf({ colis, entreprise }) {
   })
   const qrCanvas = document.querySelector("#mainQr canvas")
   const qrImage = qrCanvas?.toDataURL("image/png")
-  const logoUrl =
-    entreprise?.logoUrl ||
-    entreprise?.logoURL ||
-    entreprise?.logo ||
-    entreprise?.imageUrl ||
-    "/images/logo.png"
-
-  let logoImage = await imageUrlToBase64(logoUrl)
-
-  if (!logoImage && logoUrl !== "/images/logo.png") {
-    logoImage = await imageUrlToBase64("/images/logo.png")
-  }
-
   const isAir = colis.typeDeFret === "Aérien"
 
-  drawHeader(pdf, { entreprise, logoImage })
+  // Le bordereau reste volontairement sans logo.
+  drawHeader(pdf, { entreprise, logoImage: null })
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(20)
@@ -308,7 +296,7 @@ export async function generateBordereauPdf({ colis, entreprise }) {
     if (y > 238) {
       drawFooter(pdf)
       pdf.addPage()
-      drawHeader(pdf, { entreprise, logoImage })
+      drawHeader(pdf, { entreprise, logoImage: null })
       y = 52
       drawTableHeader(pdf, y, isAir)
       y += 9
