@@ -1,16 +1,22 @@
 <script setup>
 import { ref, computed, onMounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { doc, getDoc, getDocs, collection, updateDoc } from "firebase/firestore"
+import { doc, getDoc, getDocs, collection, query, updateDoc, where } from "firebase/firestore"
 import { useFirestore } from "vuefire"
 import { toast } from "vue3-toastify"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { firebaseApp } from "../../components/firebaseConfig"
+import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 
 const db = useFirestore()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const entrepriseId = computed(() =>
+  authStore.entreprise?.id
+  || authStore.userProfile?.entrepriseId
+  || PARIS_FRET_ENTREPRISE_ID
+)
 
 const chargementId = route.params.id
 
@@ -104,16 +110,26 @@ async function fetchData() {
   loading.value = true
 
   try {
+    if (!entrepriseId.value) {
+      throw new Error("Entreprise introuvable")
+    }
+
     const chargementSnap = await getDoc(doc(db, "chargements", chargementId))
 
     if (chargementSnap.exists()) {
+      if (chargementSnap.data().entrepriseId !== entrepriseId.value) {
+        throw new Error("Chargement inaccessible")
+      }
       chargement.value = {
         id: chargementSnap.id,
         ...chargementSnap.data()
       }
     }
 
-    const snap = await getDocs(collection(db, "enlevements"))
+    const snap = await getDocs(query(
+      collection(db, "enlevements"),
+      where("entrepriseId", "==", entrepriseId.value)
+    ))
 
     enlevements.value = snap.docs.map(item => ({
       id: item.id,
