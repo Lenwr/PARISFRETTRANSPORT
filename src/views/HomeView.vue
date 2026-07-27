@@ -10,12 +10,20 @@ import {
   RefreshCw,
   ClipboardList,
   Ship,
-  Clock
+  Clock,
+  Banknote,
+  WalletCards,
+  TrendingUp,
+  CircleDollarSign,
+  Plane,
+  CircleCheck,
+  AlertCircle
 } from "lucide-vue-next"
 
 import { useAuthStore } from "../stores/useAuthStore"
 import { useEnlevementStore } from "../stores/modules/colis"
 import { PARIS_FRET_ENTREPRISE_ID, PARIS_FRET_ENTREPRISE_NAME } from "../appConfig"
+import { formatMoney, parseMoney } from "../utils/money"
 
 const authStore = useAuthStore()
 const enlevementStore = useEnlevementStore()
@@ -28,34 +36,126 @@ const entrepriseNom = computed(() => authStore.entreprise?.nom || PARIS_FRET_ENT
 const totalEnlevements = computed(() => enlevementStore.totalEnlevements)
 const enlevementsDuJour = computed(() => enlevementStore.enlevementsDuJour)
 const loading = computed(() => enlevementStore.loading)
+const enlevements = computed(() => enlevementStore.enlevements || [])
+
+function toDate(value) {
+  if (!value) return null
+  if (typeof value.toDate === "function") return value.toDate()
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function sameMonth(date, reference) {
+  return date
+    && date.getMonth() === reference.getMonth()
+    && date.getFullYear() === reference.getFullYear()
+}
+
+const financials = computed(() => {
+  const now = new Date()
+  const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  let revenue = 0
+  let collected = 0
+  let remaining = 0
+  let monthRevenue = 0
+  let previousMonthRevenue = 0
+
+  enlevements.value.forEach(item => {
+    const price = parseMoney(item.prix)
+    const recordedDue = Math.max(0, parseMoney(item.resteAPayer))
+    const due = item.statut === "Payé"
+      ? 0
+      : item.statut === "Non Payé" && recordedDue <= 0
+        ? price
+        : Math.min(price, recordedDue)
+    const date = toDate(item.date) || toDate(item.createdAt)
+    revenue += price
+    remaining += due
+    collected += Math.max(0, price - due)
+    if (sameMonth(date, now)) monthRevenue += price
+    if (sameMonth(date, previousMonth)) previousMonthRevenue += price
+  })
+
+  const growth = previousMonthRevenue > 0
+    ? ((monthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+    : monthRevenue > 0 ? 100 : 0
+
+  return { revenue, collected, remaining, monthRevenue, previousMonthRevenue, growth }
+})
+
+const paidCount = computed(() => enlevements.value.filter(item =>
+  item.statut === "Payé" || parseMoney(item.resteAPayer) <= 0 && parseMoney(item.prix) > 0
+).length)
+const unpaidCount = computed(() => enlevements.value.filter(item =>
+  parseMoney(item.resteAPayer) > 0 || item.statut === "Non Payé" || item.statut === "Reste à payer"
+).length)
+const averageBasket = computed(() =>
+  enlevements.value.length ? financials.value.revenue / enlevements.value.length : 0
+)
+const maritimeCount = computed(() => enlevements.value.filter(item => item.typeDeFret === "Maritime").length)
+const airCount = computed(() => enlevements.value.filter(item => item.typeDeFret === "Aérien").length)
+const deliveredCount = computed(() => enlevements.value.filter(item =>
+  ["Livré", "Réceptionné"].includes(item.deliveryStatus)
+).length)
+const pendingCount = computed(() => Math.max(0, enlevements.value.length - deliveredCount.value))
+const uniqueClients = computed(() => new Set(enlevements.value.map(item =>
+  String(item.telephoneExpediteur || item.expediteur || "").trim().toLowerCase()
+).filter(Boolean)).size)
+
+const lastSevenDays = computed(() => {
+  const formatter = new Intl.DateTimeFormat("fr-FR", { weekday: "short" })
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    date.setDate(date.getDate() - (6 - index))
+    return { date, label: formatter.format(date).replace(".", ""), revenue: 0, count: 0 }
+  })
+
+  enlevements.value.forEach(item => {
+    const date = toDate(item.date) || toDate(item.createdAt)
+    if (!date) return
+    const day = days.find(entry => entry.date.toDateString() === date.toDateString())
+    if (!day) return
+    day.revenue += parseMoney(item.prix)
+    day.count++
+  })
+
+  const maximum = Math.max(...days.map(day => day.revenue), 1)
+  return days.map(day => ({ ...day, height: Math.max(day.revenue ? 12 : 3, day.revenue / maximum * 100) }))
+})
+
+const recentShipments = computed(() => [...enlevements.value]
+  .sort((a, b) => (toDate(b.date) || toDate(b.createdAt) || 0) - (toDate(a.date) || toDate(a.createdAt) || 0))
+  .slice(0, 5)
+)
 
 const stats = computed(() => [
   {
-    label: "Colis enregistrés",
-    value: totalEnlevements.value,
-    helper: "Tous les dossiers",
-    icon: Package,
+    label: "Chiffre d’affaires",
+    value: formatMoney(financials.value.revenue),
+    helper: `${totalEnlevements.value} dossiers au total`,
+    icon: Banknote,
     tone: "primary"
   },
   {
-    label: "Aujourd'hui",
-    value: enlevementsDuJour.value,
-    helper: "Nouveaux enlèvements",
-    icon: Clock,
+    label: "CA du mois",
+    value: formatMoney(financials.value.monthRevenue),
+    helper: `${financials.value.growth >= 0 ? "+" : ""}${financials.value.growth.toFixed(1)} % vs mois précédent`,
+    icon: TrendingUp,
     tone: "emerald"
   },
   {
-    label: "Clients",
-    value: "—",
-    helper: "À connecter",
-    icon: Users,
+    label: "Montant encaissé",
+    value: formatMoney(financials.value.collected),
+    helper: `${paidCount.value} dossiers soldés`,
+    icon: WalletCards,
     tone: "sky"
   },
   {
-    label: "Chargements",
-    value: "—",
-    helper: "En préparation",
-    icon: Boxes,
+    label: "Reste à encaisser",
+    value: formatMoney(financials.value.remaining),
+    helper: `${unpaidCount.value} paiements à surveiller`,
+    icon: CircleDollarSign,
     tone: "amber"
   }
 ])
@@ -153,6 +253,76 @@ watch(entrepriseId, async newEntrepriseId => {
       </div>
     </div>
 
+    <div class="grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+      <div class="rounded-[28px] border border-slate-950/[0.07] bg-white/90 p-7 shadow-[0_24px_70px_rgba(15,23,42,0.07)] sm:p-8">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-primary">Activité financière</p>
+            <h2 class="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950">Chiffre d’affaires sur 7 jours</h2>
+          </div>
+          <p class="text-sm font-bold text-slate-500">Panier moyen : <span class="text-slate-950">{{ formatMoney(averageBasket) }}</span></p>
+        </div>
+
+        <div class="mt-8 grid h-64 grid-cols-7 items-end gap-2 sm:gap-4">
+          <div v-for="day in lastSevenDays" :key="day.date.toISOString()" class="flex h-full min-w-0 flex-col justify-end">
+            <p class="mb-2 truncate text-center text-[10px] font-black text-slate-500 sm:text-xs">{{ day.revenue ? formatMoney(day.revenue) : "0 €" }}</p>
+            <div class="relative flex h-44 items-end overflow-hidden rounded-xl bg-slate-100">
+              <div class="w-full rounded-xl bg-gradient-to-t from-primary to-emerald-400 transition-all duration-500" :style="{ height: `${day.height}%` }"></div>
+            </div>
+            <p class="mt-2 text-center text-xs font-black uppercase text-slate-500">{{ day.label }}</p>
+            <p class="text-center text-[10px] text-slate-400">{{ day.count }} colis</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-[28px] border border-slate-950/[0.07] bg-white/90 p-7 shadow-[0_24px_70px_rgba(15,23,42,0.07)] sm:p-8">
+        <p class="text-xs font-black uppercase tracking-[0.18em] text-primary">Indicateurs clés</p>
+        <h2 class="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950">Résumé activité</h2>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <div class="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+            <div class="flex items-center gap-3"><Users class="h-5 w-5 text-sky-600" /><span class="font-bold text-slate-600">Clients uniques</span></div><strong class="text-xl text-slate-950">{{ uniqueClients }}</strong>
+          </div>
+          <div class="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+            <div class="flex items-center gap-3"><Ship class="h-5 w-5 text-primary" /><span class="font-bold text-slate-600">Maritime</span></div><strong class="text-xl text-slate-950">{{ maritimeCount }}</strong>
+          </div>
+          <div class="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+            <div class="flex items-center gap-3"><Plane class="h-5 w-5 text-violet-600" /><span class="font-bold text-slate-600">Aérien</span></div><strong class="text-xl text-slate-950">{{ airCount }}</strong>
+          </div>
+          <div class="flex items-center justify-between rounded-2xl bg-emerald-50 p-4">
+            <div class="flex items-center gap-3"><CircleCheck class="h-5 w-5 text-emerald-600" /><span class="font-bold text-emerald-800">Livrés</span></div><strong class="text-xl text-emerald-900">{{ deliveredCount }}</strong>
+          </div>
+          <div class="flex items-center justify-between rounded-2xl bg-amber-50 p-4">
+            <div class="flex items-center gap-3"><AlertCircle class="h-5 w-5 text-amber-600" /><span class="font-bold text-amber-800">En cours</span></div><strong class="text-xl text-amber-900">{{ pendingCount }}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-[28px] border border-slate-950/[0.07] bg-white/90 p-7 shadow-[0_24px_70px_rgba(15,23,42,0.07)] sm:p-8">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-primary">Monitoring</p>
+          <h2 class="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950">Derniers colis enregistrés</h2>
+        </div>
+        <router-link to="/liste" class="btn btn-sm rounded-xl bg-slate-950 text-white">Voir tous</router-link>
+      </div>
+      <div class="mt-6 overflow-x-auto">
+        <table class="table">
+          <thead><tr class="text-xs uppercase text-slate-400"><th>Numéro</th><th>Expéditeur</th><th>Transport</th><th>Paiement</th><th class="text-right">Montant</th></tr></thead>
+          <tbody>
+            <tr v-for="item in recentShipments" :key="item.id" class="border-slate-100">
+              <td><router-link :to="`/liste/${item.id}`" class="font-black text-primary">{{ item.numero || "Colis" }}</router-link></td>
+              <td><p class="font-bold text-slate-900">{{ item.expediteur || "-" }}</p><p class="text-xs text-slate-400">{{ item.destination || "-" }}</p></td>
+              <td><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">{{ item.typeDeFret || "-" }}</span></td>
+              <td><span class="text-sm font-bold" :class="item.statut === 'Payé' ? 'text-emerald-600' : 'text-amber-600'">{{ item.statut || "Non Payé" }}</span></td>
+              <td class="text-right font-black">{{ formatMoney(parseMoney(item.prix)) }}</td>
+            </tr>
+            <tr v-if="!recentShipments.length"><td colspan="5" class="py-8 text-center text-slate-400">Aucun colis enregistré.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_0.75fr]">
       <div class="rounded-[28px] border border-slate-950/[0.07] bg-white/82 p-7 shadow-[0_24px_70px_rgba(15,23,42,0.07)] backdrop-blur sm:p-8">
         <div class="mb-7 flex items-center justify-between gap-3">
@@ -187,12 +357,16 @@ watch(entrepriseId, async newEntrepriseId => {
         <h2 class="mt-3 text-2xl font-black tracking-[-0.04em]">À surveiller</h2>
         <div class="mt-7 space-y-3">
           <div class="rounded-2xl border border-white/8 bg-white/[0.06] p-5">
-            <p class="text-sm font-bold text-white/72">Colis du jour</p>
+            <p class="text-sm font-bold text-white/72">Colis enregistrés aujourd’hui</p>
             <p class="mt-2 text-2xl font-black">{{ loading ? "..." : enlevementsDuJour }}</p>
           </div>
           <div class="rounded-2xl border border-white/8 bg-white/[0.06] p-5">
-            <p class="text-sm font-bold text-white/72">Total actuel</p>
-            <p class="mt-2 text-2xl font-black">{{ loading ? "..." : totalEnlevements }}</p>
+            <p class="text-sm font-bold text-white/72">Taux d’encaissement</p>
+            <p class="mt-2 text-2xl font-black">{{ loading ? "..." : `${financials.revenue ? (financials.collected / financials.revenue * 100).toFixed(1) : 0} %` }}</p>
+          </div>
+          <div class="rounded-2xl border border-amber-300/15 bg-amber-300/[0.08] p-5">
+            <p class="text-sm font-bold text-amber-100/80">À encaisser</p>
+            <p class="mt-2 text-2xl font-black text-amber-200">{{ loading ? "..." : formatMoney(financials.remaining) }}</p>
           </div>
         </div>
       </div>
