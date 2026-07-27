@@ -18,7 +18,6 @@ const chargement = ref(null)
 const enlevements = ref([])
 const loading = ref(true)
 const sendingSMS = ref(false)
-const sendingWhatsApp = ref(false)
 
 const selectedStatus = ref("En transit")
 
@@ -37,9 +36,6 @@ const statusOptions = [
 const projectId = firebaseApp.options.projectId
 const SMS_URL =
   `https://us-central1-${projectId}.cloudfunctions.net/sendShipmentSMS`
-
-const WHATSAPP_URL =
-  `https://us-central1-${projectId}.cloudfunctions.net/sendWhatsAppTemplateBroadcast`
 
 const colisDuVoyage = computed(() => {
   const result = []
@@ -239,96 +235,6 @@ async function sendSMSBroadcast() {
   }
 }
 
-async function sendWhatsAppBroadcast() {
-  sendingWhatsApp.value = true
-
-  try {
-
-    const recipients = getRecipientsPayload()
-
-    if (!recipients.length) {
-
-      toast("Aucun numéro disponible", {
-        type: "warning"
-      })
-
-      return
-    }
-
-    const response = await fetch(
-
-      WHATSAPP_URL,
-
-      {
-        method: "POST",
-
-        headers: await getAuthHeaders(),
-
-        body: JSON.stringify({
-
-          recipients,
-
-          statut: selectedStatus.value,
-
-          customMessage: customMessage.value,
-
-          entreprise:
-            authStore?.entreprise?.nom ||
-            "Paris Fret Transport"
-
-        })
-
-      }
-
-    )
-
-    const data = await response.json()
-
-    console.log("RESULT WHATSAPP", data)
-
-    if (!response.ok || !data.success) {
-
-      throw new Error(
-        data.error || "Erreur WhatsApp"
-      )
-
-    }
-
-    const successCount =
-      data.results?.filter(
-        item => item.success
-      ).length || 0
-
-    toast(
-
-      `WhatsApp envoyés ${successCount}/${recipients.length}`,
-
-      {
-        type:
-          successCount > 0
-            ? "success"
-            : "warning"
-      }
-
-    )
-
-  } catch (error) {
-
-    console.error(error)
-
-    toast(
-      error.message || "Erreur WhatsApp",
-      {
-        type: "error"
-      }
-    )
-
-  } finally {
-
-    sendingWhatsApp.value = false
-
-  }
-}
 onMounted(fetchData)
 </script>
 
@@ -432,21 +338,13 @@ onMounted(fetchData)
             <p class="break-words">{{ notificationMessage }}</p>
           </div>
 
-          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="mt-4">
             <button
               class="btn w-full rounded-2xl bg-green-600 text-white hover:bg-green-700"
-              :disabled="sendingSMS || sendingWhatsApp"
+              :disabled="sendingSMS"
               @click="sendSMSBroadcast"
             >
               {{ sendingSMS ? "Envoi SMS..." : "Diffuser par SMS" }}
-            </button>
-
-            <button
-              class="btn w-full rounded-2xl bg-emerald-500 text-white hover:bg-emerald-600"
-              :disabled="sendingSMS || sendingWhatsApp"
-              @click="sendWhatsAppBroadcast"
-            >
-              {{ sendingWhatsApp ? "Envoi WhatsApp..." : "Diffuser par WhatsApp" }}
             </button>
           </div>
         </div>

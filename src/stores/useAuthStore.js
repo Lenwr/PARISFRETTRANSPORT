@@ -41,7 +41,7 @@ const PARIS_FRET_ENTREPRISE = {
     factures: true,
     outils: true,
     scanQr: true,
-    smsWhatsapp: true,
+    sms: true,
     suiviPublic: true,
     exportExcel: true,
     employes: true,

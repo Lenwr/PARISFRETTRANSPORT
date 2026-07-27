@@ -12,9 +12,7 @@ const db = admin.firestore()
 
 const twilioNumber = process.env.TWILIO_NUMBER
 const twilioSenderId = process.env.TWILIO_SENDER_ID
-const whatsappSender = process.env.TWILIO_WHATSAPP_SENDER || twilioNumber
 const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID
-const colisStatutTemplateSid = process.env.TWILIO_COLIS_STATUT_TEMPLATE_SID
 const twilioStatusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL
 const MAX_BROADCAST_RECIPIENTS = 100
 
@@ -735,114 +733,6 @@ exports.deleteEntreprise = functions.https.onRequest((req, res) => {
       return res.status(500).json({
         success: false,
         error: "Erreur suppression entreprise",
-        details: error.message
-      })
-    }
-  })
-})
-
-exports.sendWhatsAppTemplateBroadcast = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
-    try {
-      if (req.method !== "POST") {
-        return res.status(405).json({
-          success: false,
-          error: "Méthode non autorisée"
-        })
-      }
-
-      const decodedToken = await verifyRequestUser(req)
-      await validateCustomerBroadcast(decodedToken, req.body || {})
-
-      const { recipients, customMessage, entreprise } = req.body || {}
-
-      if (!Array.isArray(recipients) || recipients.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: "Recipients manquant."
-        })
-      }
-
-      const uniqueRecipients = [
-        ...new Map(
-          recipients
-            .map(item => {
-              const phone = normalizePhone(item.phone)
-              if (!phone) return null
-
-              return [
-                phone,
-                {
-                  ...item,
-                  phone
-                }
-              ]
-            })
-            .filter(Boolean)
-        ).values()
-      ]
-
-      const results = []
-
-      for (const recipient of uniqueRecipients) {
-        try {
-          const payload = customMessage
-            ? {
-                body: buildMessage(customMessage, {
-                  expediteur: recipient.expediteur,
-                  destinataire: recipient.destinataire,
-                  prenom: recipient.prenom,
-                  nom: recipient.nom,
-                  client: recipient.client || recipient.destinataire || recipient.expediteur,
-                  telephone: recipient.phone,
-                  numero: recipient.numero,
-                  destination: recipient.destination,
-                  statut: recipient.statut,
-                  entreprise
-                }),
-                from: `whatsapp:${whatsappSender}`,
-                to: `whatsapp:${recipient.phone}`
-              }
-            : {
-                messagingServiceSid,
-                contentSid: colisStatutTemplateSid,
-                from: `whatsapp:${whatsappSender}`,
-                to: `whatsapp:${recipient.phone}`
-              }
-
-          const message = await getTwilioClient().messages.create(payload)
-
-          results.push({
-            phone: recipient.phone,
-            success: true,
-            sid: message.sid,
-            status: message.status
-          })
-        } catch (error) {
-          results.push({
-            phone: recipient.phone,
-            success: false,
-            error: error.message,
-            code: error.code,
-            moreInfo: error.moreInfo
-          })
-        }
-      }
-
-      const sent = results.filter(item => item.success).length
-
-      return res.status(200).json({
-        success: true,
-        sent,
-        total: uniqueRecipients.length,
-        results
-      })
-    } catch (error) {
-      console.error("Erreur WhatsApp broadcast :", error)
-
-      return res.status(error.statusCode || 500).json({
-        success: false,
-        error: error.statusCode ? error.message : "Erreur diffusion WhatsApp",
         details: error.message
       })
     }
