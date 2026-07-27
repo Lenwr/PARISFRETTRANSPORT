@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { Plus, Send, Trash2 } from "lucide-vue-next"
 import { firebaseApp } from "../../components/firebaseConfig"
@@ -12,6 +12,17 @@ const error = ref("")
 const company = ref({ name: "Paris Fret Transport", logoUrl: "/images/logo.png" })
 const catalogue = ref([])
 const endpoint = "https://us-central1-" + firebaseApp.options.projectId + ".cloudfunctions.net/clientRequestForm"
+const emptyPackage = () => ({
+  nom: "",
+  quantite: 1,
+  catalogueId: "",
+  typeTarif: "libre",
+  prixUnitaire: 0,
+  prixParM3: 0,
+  longueur: 0,
+  largeur: 0,
+  hauteur: 0
+})
 const form = ref({
   expediteur: "",
   telephoneExpediteur: "",
@@ -23,18 +34,79 @@ const form = ref({
   personneEnCharge: "",
   telephoneAgent: "",
   poidsTotal: "",
-  colis: [{ nom: "", quantite: 1 }],
+  statut: "Non Payé",
+  prix: 0,
+  resteAPayer: 0,
+  modeDePaiement: "Espèces",
+  colis: [emptyPackage()],
   notes: ""
 })
 
 function addPackage() {
-  form.value.colis.push({ nom: "", quantite: 1 })
+  form.value.colis.push(emptyPackage())
 }
 
 function removePackage(index) {
-  if (form.value.colis.length === 1) form.value.colis[0] = { nom: "", quantite: 1 }
+  if (form.value.colis.length === 1) form.value.colis[0] = emptyPackage()
   else form.value.colis.splice(index, 1)
 }
+
+function volumeM3(item) {
+  if (item.typeTarif !== "volume") return 0
+  return Math.max(1, Number(item.quantite || 1))
+    * Number(item.longueur || 0)
+    * Number(item.largeur || 0)
+    * Number(item.hauteur || 0)
+    / 1_000_000
+}
+
+function lineTotal(item) {
+  return item.typeTarif === "volume"
+    ? volumeM3(item) * Number(item.prixParM3 || 0)
+    : item.typeTarif === "fixe"
+      ? Math.max(1, Number(item.quantite || 1)) * Number(item.prixUnitaire || 0)
+      : 0
+}
+
+const calculatedTotal = computed(() =>
+  form.value.colis.reduce((total, item) => total + lineTotal(item), 0)
+)
+const hasCataloguePrice = computed(() =>
+  form.value.colis.some(item => ["fixe", "volume"].includes(item.typeTarif))
+)
+const formatPrice = value => Number(value || 0).toLocaleString("fr-FR", {
+  style: "currency",
+  currency: "EUR"
+})
+
+function applyCatalogue(item) {
+  const article = catalogue.value.find(entry =>
+    String(entry.nom).trim().toLowerCase() === String(item.nom).trim().toLowerCase()
+  )
+  if (!article) {
+    Object.assign(item, emptyPackage(), { nom: item.nom, quantite: item.quantite || 1 })
+    return
+  }
+  Object.assign(item, {
+    catalogueId: article.id || "",
+    typeTarif: article.typeTarif || "fixe",
+    prixUnitaire: Number(article.prixUnitaire || 0),
+    prixParM3: Number(article.prixParM3 || 0)
+  })
+}
+
+watch(calculatedTotal, total => {
+  if (!hasCataloguePrice.value) return
+  form.value.prix = Number(total.toFixed(2))
+  form.value.resteAPayer = form.value.statut === "Payé" ? 0 : Number(total.toFixed(2))
+})
+
+watch(() => form.value.statut, statut => {
+  if (statut === "Payé") form.value.resteAPayer = 0
+  if (statut === "Non Payé" && hasCataloguePrice.value) {
+    form.value.resteAPayer = Number(calculatedTotal.value.toFixed(2))
+  }
+})
 
 onMounted(async () => {
   try {
@@ -64,7 +136,17 @@ async function submit() {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: route.params.token, request: form.value })
+      body: JSON.stringify({
+        token: route.params.token,
+        request: {
+          ...form.value,
+          colis: form.value.colis.map(item => ({
+            ...item,
+            volumeM3: Number(volumeM3(item).toFixed(4)),
+            totalLigne: Number(lineTotal(item).toFixed(2))
+          }))
+        }
+      })
     })
     const data = await response.json()
     if (!response.ok) {
@@ -133,11 +215,37 @@ async function submit() {
         <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div class="flex items-center justify-between gap-4"><h2 class="text-xl font-black">Colis et articles</h2><button type="button" class="btn btn-sm rounded-xl bg-slate-950 text-white" @click="addPackage"><Plus class="h-4 w-4" /> Ajouter</button></div>
           <div class="mt-5 space-y-3">
-            <div v-for="(item, index) in form.colis" :key="index" class="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-[1fr_130px_48px]">
-              <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Article</span><input v-model="item.nom" required list="public-catalogue-articles" class="input input-bordered w-full rounded-xl bg-white" placeholder="Choisir ou écrire un article" /></label>
-              <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Quantité</span><input v-model.number="item.quantite" required type="number" min="1" class="input input-bordered w-full rounded-xl bg-white" /></label>
-              <button type="button" class="btn btn-square mt-auto rounded-xl bg-red-50 text-red-700" aria-label="Supprimer" @click="removePackage(index)"><Trash2 class="h-4 w-4" /></button>
+            <div v-for="(item, index) in form.colis" :key="index" class="rounded-2xl bg-slate-50 p-4">
+              <div class="grid gap-3 sm:grid-cols-[1fr_130px_48px]">
+                <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Article</span><input v-model="item.nom" required list="public-catalogue-articles" class="input input-bordered w-full rounded-xl bg-white" placeholder="Choisir ou écrire un article" @change="applyCatalogue(item)" @blur="applyCatalogue(item)" /></label>
+                <label><span class="mb-2 block text-xs font-black uppercase text-slate-500">Quantité</span><input v-model.number="item.quantite" required type="number" min="1" class="input input-bordered w-full rounded-xl bg-white" /></label>
+                <button type="button" class="btn btn-square mt-auto rounded-xl bg-red-50 text-red-700" aria-label="Supprimer" @click="removePackage(index)"><Trash2 class="h-4 w-4" /></button>
+              </div>
+              <div v-if="item.typeTarif === 'volume'" class="mt-4 grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto_auto] lg:items-end">
+                <label><span class="mb-1 block text-xs font-bold text-slate-500">Longueur (cm)</span><input v-model.number="item.longueur" required type="number" min="0" step="0.1" class="input input-bordered w-full rounded-xl bg-white" /></label>
+                <label><span class="mb-1 block text-xs font-bold text-slate-500">Largeur (cm)</span><input v-model.number="item.largeur" required type="number" min="0" step="0.1" class="input input-bordered w-full rounded-xl bg-white" /></label>
+                <label><span class="mb-1 block text-xs font-bold text-slate-500">Hauteur (cm)</span><input v-model.number="item.hauteur" required type="number" min="0" step="0.1" class="input input-bordered w-full rounded-xl bg-white" /></label>
+                <div class="rounded-xl bg-white px-4 py-3 text-sm"><span class="block text-xs text-slate-400">Volume</span><strong>{{ volumeM3(item).toFixed(3) }} m³</strong></div>
+                <div class="rounded-xl bg-primary/10 px-4 py-3 text-sm text-primary"><span class="block text-xs">{{ formatPrice(item.prixParM3) }}/m³</span><strong>{{ formatPrice(lineTotal(item)) }}</strong></div>
+              </div>
+              <div v-else-if="item.typeTarif === 'fixe'" class="mt-4 flex items-center justify-between border-t border-slate-200 pt-4 text-sm">
+                <span class="text-slate-500">{{ formatPrice(item.prixUnitaire) }} × {{ item.quantite }}</span>
+                <strong class="text-primary">{{ formatPrice(lineTotal(item)) }}</strong>
+              </div>
             </div>
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <h2 class="text-xl font-black">Paiement</h2>
+          <div v-if="hasCataloguePrice" class="mt-5 flex items-center justify-between rounded-2xl bg-primary/10 px-5 py-4">
+            <span class="font-bold">Total calculé</span><strong class="text-xl text-primary">{{ formatPrice(calculatedTotal) }}</strong>
+          </div>
+          <div class="mt-5 grid gap-4 sm:grid-cols-2">
+            <label><span class="mb-2 block text-sm font-bold">Statut</span><select v-model="form.statut" class="select select-bordered w-full rounded-xl"><option>Non Payé</option><option>Reste à payer</option><option>Payé</option></select></label>
+            <label><span class="mb-2 block text-sm font-bold">Mode de paiement</span><select v-model="form.modeDePaiement" class="select select-bordered w-full rounded-xl"><option>Espèces</option><option>Chèque</option><option>CB</option><option>Virement</option></select></label>
+            <label><span class="mb-2 block text-sm font-bold">Prix</span><input v-model.number="form.prix" type="number" min="0" step="0.01" :readonly="hasCataloguePrice" class="input input-bordered w-full rounded-xl" /></label>
+            <label><span class="mb-2 block text-sm font-bold">Reste à payer</span><input v-model.number="form.resteAPayer" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-xl" /></label>
           </div>
         </section>
 

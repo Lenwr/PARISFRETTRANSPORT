@@ -481,14 +481,18 @@ exports.clientRequestForm = functions.https.onRequest((req, res) => {
         ])
         const entreprise = entrepriseSnap.exists ? entrepriseSnap.data() : {}
         const catalogue = catalogueSnap.docs
-          .map(item => item.data())
+          .map(item => ({ id: item.id, ...item.data() }))
           .filter(item => item.actif !== false && item.nom)
           .sort((a, b) => Number(a.ordre || 100) - Number(b.ordre || 100)
             || String(a.nom).localeCompare(String(b.nom)))
           .map(item => ({
+            id: item.id,
             nom: String(item.nom || "").slice(0, 160),
             categorie: String(item.categorie || "").slice(0, 80),
-            unite: String(item.unite || "").slice(0, 40)
+            unite: String(item.unite || "").slice(0, 40),
+            typeTarif: item.typeTarif === "volume" ? "volume" : "fixe",
+            prixUnitaire: Math.max(0, Number(item.prixUnitaire || 0)),
+            prixParM3: Math.max(0, Number(item.prixParM3 || 0))
           }))
 
         return res.json({
@@ -525,7 +529,20 @@ exports.clientRequestForm = functions.https.onRequest((req, res) => {
       const requestedPackages = Array.isArray(input.colis)
         ? input.colis.slice(0, 30).map(item => ({
           nom: String(item?.nom || "").trim().slice(0, 160),
-          quantite: Math.max(1, Math.min(999, Number(item?.quantite || 1)))
+          quantite: Math.max(1, Math.min(999, Number(item?.quantite || 1))),
+          catalogueId: String(item?.catalogueId || "").slice(0, 120),
+          typeTarif: item?.typeTarif === "volume"
+            ? "volume"
+            : item?.typeTarif === "fixe" ? "fixe" : "libre",
+          prixUnitaire: Math.max(0, Number(item?.prixUnitaire || 0)),
+          prixParM3: Math.max(0, Number(item?.prixParM3 || 0)),
+          dimensions: item?.typeTarif === "volume" ? {
+            longueur: Math.max(0, Number(item?.longueur || item?.dimensions?.longueur || 0)),
+            largeur: Math.max(0, Number(item?.largeur || item?.dimensions?.largeur || 0)),
+            hauteur: Math.max(0, Number(item?.hauteur || item?.dimensions?.hauteur || 0))
+          } : null,
+          volumeM3: Math.max(0, Number(item?.volumeM3 || 0)),
+          totalLigne: Math.max(0, Number(item?.totalLigne || 0))
         })).filter(item => item.nom)
         : []
       const requestData = {
@@ -547,6 +564,14 @@ exports.clientRequestForm = functions.https.onRequest((req, res) => {
         poidsTotal: input.typeDeFret === "Aérien"
           ? Math.max(0, Number(input.poidsTotal || 0))
           : 0,
+        statut: ["Non Payé", "Reste à payer", "Payé"].includes(input.statut)
+          ? input.statut
+          : "Non Payé",
+        prix: Math.max(0, Number(input.prix || 0)),
+        resteAPayer: Math.max(0, Number(input.resteAPayer || 0)),
+        modeDePaiement: ["Espèces", "Chèque", "CB", "Virement"].includes(input.modeDePaiement)
+          ? input.modeDePaiement
+          : "Espèces",
         colis: requestedPackages,
         descriptionColis: requestedPackages.map(item => item.quantite + " × " + item.nom).join(", ").slice(0, 500),
         nombreDeColis: requestedPackages.reduce((total, item) => total + item.quantite, 0),
