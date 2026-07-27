@@ -583,9 +583,11 @@ onMounted(fetchCatalogue)
               <option>Virement</option>
             </select>
 
-            <input v-model="form.prix" inputmode="decimal" class="input input-bordered rounded-2xl"
-              :readonly="tarifCatalogueActif"
-              placeholder="Prix" />
+            <label>
+              <span class="mb-1 block text-xs font-bold text-slate-500">Prix final modifiable</span>
+              <input v-model="form.prix" inputmode="decimal" class="input input-bordered w-full rounded-2xl"
+                placeholder="Prix" />
+            </label>
 
             <input v-model="form.resteAPayer" inputmode="decimal"
               class="input input-bordered rounded-2xl" placeholder="Reste à payer" />

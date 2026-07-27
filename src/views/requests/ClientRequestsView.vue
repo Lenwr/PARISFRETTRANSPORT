@@ -99,7 +99,10 @@ async function saveRequest() {
       }
     })
     const calculatedPrice = packages.reduce((sum, entry) => sum + entry.totalLigne, 0)
-    if (packages.some(entry => ["fixe", "volume"].includes(entry.typeTarif))) {
+    if (
+      packages.some(entry => ["fixe", "volume"].includes(entry.typeTarif))
+      && Number(selected.value.prix || 0) <= 0
+    ) {
       selected.value.prix = Number(calculatedPrice.toFixed(2))
       if (selected.value.statut === "Non Payé") selected.value.resteAPayer = selected.value.prix
       if (selected.value.statut === "Payé") selected.value.resteAPayer = 0
@@ -155,7 +158,10 @@ async function validateRequest(item) {
       ? item.colis
       : [{ nom: item.descriptionColis || "Colis", quantite: item.nombreDeColis || 1 }]
     packages.forEach(calculateRequestPackage)
-    if (packages.some(entry => ["fixe", "volume"].includes(entry.typeTarif))) {
+    if (
+      packages.some(entry => ["fixe", "volume"].includes(entry.typeTarif))
+      && Number(item.prix || 0) <= 0
+    ) {
       item.prix = Number(packages.reduce((sum, entry) => sum + Number(entry.totalLigne || 0), 0).toFixed(2))
       if (item.statut === "Non Payé") item.resteAPayer = item.prix
       if (item.statut === "Payé") item.resteAPayer = 0

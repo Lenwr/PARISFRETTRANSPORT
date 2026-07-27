@@ -244,7 +244,7 @@ async function submit() {
           <div class="mt-5 grid gap-4 sm:grid-cols-2">
             <label><span class="mb-2 block text-sm font-bold">Statut</span><select v-model="form.statut" class="select select-bordered w-full rounded-xl"><option>Non Payé</option><option>Reste à payer</option><option>Payé</option></select></label>
             <label><span class="mb-2 block text-sm font-bold">Mode de paiement</span><select v-model="form.modeDePaiement" class="select select-bordered w-full rounded-xl"><option>Espèces</option><option>Chèque</option><option>CB</option><option>Virement</option></select></label>
-            <label><span class="mb-2 block text-sm font-bold">Prix</span><input v-model.number="form.prix" type="number" min="0" step="0.01" :readonly="hasCataloguePrice" class="input input-bordered w-full rounded-xl" /></label>
+            <label><span class="mb-2 block text-sm font-bold">Prix final modifiable</span><input v-model.number="form.prix" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-xl" /></label>
             <label><span class="mb-2 block text-sm font-bold">Reste à payer</span><input v-model.number="form.resteAPayer" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-xl" /></label>
           </div>
         </section>
