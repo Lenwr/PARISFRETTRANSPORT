@@ -52,7 +52,11 @@ const editOpen = ref(false)
 const entreprise = ref(null)
 
 const enlevementRef = computed(() => {
-  if (!id.value) return null
+  // Les règles Firestore utilisent le profil /users/{uid}. On attend que le
+  // store ait fini de créer ou charger ce profil avant d'ouvrir l'écoute.
+  if (!id.value || !authStore.isInitialized || !authStore.userProfile?.entrepriseId) {
+    return null
+  }
   return doc(db, "enlevements", id.value)
 })
 
@@ -417,8 +421,8 @@ async function sendSms() {
         </button>
       </div>
 
-      <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <main class="space-y-6 lg:col-span-2">
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <main class="min-w-0 space-y-6">
           <div class="rounded-3xl bg-white p-6 shadow-sm">
             <div class="mb-5 flex items-center justify-between">
               <h2 class="text-lg font-bold text-slate-900">
@@ -531,7 +535,7 @@ async function sendSms() {
           </div>
         </main>
 
-        <aside class="h-fit rounded-3xl bg-white p-6 shadow-sm lg:sticky lg:top-24">
+        <aside class="h-fit min-w-0 rounded-3xl bg-white p-5 shadow-sm xl:sticky xl:top-24">
           <h2 class="mb-5 text-lg font-bold text-slate-900">
             Actions
           </h2>
@@ -588,12 +592,12 @@ async function sendSms() {
             <input v-model="colis.resteAPayer" class="input input-bordered w-full rounded-2xl"
               placeholder="Reste à payer" />
 
-            <button class="btn btn-success w-full rounded-2xl text-white" @click="quickSavePaiement">
+            <button class="btn btn-success h-auto min-h-12 w-full whitespace-normal rounded-2xl py-3 text-center leading-tight text-white" @click="quickSavePaiement">
               <Save class="h-4 w-4" />
-              Sauvegarder paiement
+              <span>Sauvegarder le paiement</span>
             </button>
 
-            <button class="btn btn-error w-full rounded-2xl text-white" @click="deleteColis">
+            <button class="btn btn-error h-auto min-h-12 w-full whitespace-normal rounded-2xl py-3 text-white" @click="deleteColis">
               <Trash2 class="h-4 w-4" />
               Supprimer
             </button>
