@@ -42,7 +42,7 @@ const router = createRouter({
       component: LoginFormView,
     },
     {
-      path: "/demande/:token",
+      path: "/demande/:token?",
       component: PublicClientRequestView,
     },
     {

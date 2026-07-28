@@ -351,7 +351,8 @@ exports.sendClientRequestInvites = functions.https.onRequest((req, res) => {
         }
 
         try {
-          const token = crypto.randomBytes(24).toString("hex")
+          // 128 bits restent sûrs tout en produisant un lien SMS plus court.
+          const token = crypto.randomBytes(16).toString("hex")
           const inviteRef = db.collection("clientRequestInvites").doc(token)
           const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 14 * 24 * 60 * 60 * 1000)
           const link = `${appUrl}/#/demande/${token}`
@@ -458,8 +459,9 @@ exports.sendShipmentSMS = functions.https.onRequest((req, res) => {
 exports.clientRequestForm = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     try {
-      const token = String(req.method === "GET" ? req.query.token : req.body?.token || "")
-      if (!/^[a-f0-9]{48}$/.test(token)) {
+      const rawToken = String(req.method === "GET" ? req.query.token : req.body?.token || "")
+      const token = rawToken.toLowerCase().match(/[a-f0-9]{32,64}/)?.[0] || ""
+      if (!/^[a-f0-9]{32,64}$/.test(token)) {
         return res.status(400).json({ success: false, error: "Lien invalide" })
       }
 

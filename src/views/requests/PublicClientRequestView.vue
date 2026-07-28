@@ -12,6 +12,20 @@ const error = ref("")
 const company = ref({ name: "Paris Fret Transport", logoUrl: "/images/logo.png" })
 const catalogue = ref([])
 const endpoint = "https://us-central1-" + firebaseApp.options.projectId + ".cloudfunctions.net/clientRequestForm"
+const requestToken = computed(() => {
+  const candidates = [
+    route.params.token,
+    route.query.token,
+    window.location.href
+  ]
+
+  for (const value of candidates) {
+    const token = String(value || "").toLowerCase().match(/[a-f0-9]{32,64}/)?.[0]
+    if (token) return token
+  }
+
+  return ""
+})
 const emptyPackage = () => ({
   nom: "",
   quantite: 1,
@@ -110,7 +124,8 @@ watch(() => form.value.statut, statut => {
 
 onMounted(async () => {
   try {
-    const response = await fetch(endpoint + "?token=" + encodeURIComponent(route.params.token))
+    if (!requestToken.value) throw new Error("Le lien du formulaire est incomplet. Demandez un nouvel envoi.")
+    const response = await fetch(endpoint + "?token=" + encodeURIComponent(requestToken.value))
     const data = await response.json()
     if (!response.ok) throw new Error(data.error)
     if (data.invite.submitted) return router.replace({ name: "request-thank-you" })
@@ -137,7 +152,7 @@ async function submit() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: route.params.token,
+        token: requestToken.value,
         request: {
           ...form.value,
           colis: form.value.colis.map(item => ({
