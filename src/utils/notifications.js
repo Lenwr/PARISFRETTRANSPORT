@@ -69,6 +69,7 @@ export function confirmToast({
         autoClose: false,
         closeOnClick: false,
         draggable: false,
+        icon: false,
         closeButton: false,
         onClose: () => finish(false)
       }

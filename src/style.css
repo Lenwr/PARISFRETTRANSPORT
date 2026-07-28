@@ -235,8 +235,10 @@ body {
 }
 
 .pft-confirm-toast {
-  min-width: 280px;
+  width: 100%;
+  min-width: 0;
   padding: 4px 2px;
+  overflow: visible;
 }
 
 .pft-confirm-toast__title {
@@ -251,11 +253,14 @@ body {
   color: #475569;
   font-size: 13px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .pft-confirm-toast__actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -283,4 +288,39 @@ body {
 .pft-confirm-toast__button--danger {
   background: #dc2626;
   color: #fff;
+}
+
+.Toastify__toast:has(.pft-confirm-toast) {
+  width: min(440px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  overflow: visible;
+  padding: 18px;
+}
+
+.Toastify__toast:has(.pft-confirm-toast) .Toastify__toast-body {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 520px) {
+  .Toastify__toast-container {
+    width: 100vw;
+    padding: 12px;
+  }
+
+  .Toastify__toast:has(.pft-confirm-toast) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pft-confirm-toast__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pft-confirm-toast__button {
+    width: 100%;
+  }
 }
