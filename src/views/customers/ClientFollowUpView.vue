@@ -7,6 +7,7 @@ import { Plus, Search, Send, Trash2, UserPlus, Users } from "lucide-vue-next"
 import { firebaseApp } from "../../components/firebaseConfig"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 import { useAuthStore } from "../../stores/useAuthStore"
+import { confirmToast } from "../../utils/notifications"
 
 const authStore = useAuthStore()
 const db = useFirestore()
@@ -166,7 +167,12 @@ async function saveContact(contact) {
 
 async function sendForms() {
   if (!validRecipients.value.length) return toast("Ajoutez au moins un client", { type: "warning" })
-  if (!window.confirm("Envoyer le formulaire à " + validRecipients.value.length + " client(s) ?")) return
+  const confirmed = await confirmToast({
+    title: "Envoyer le formulaire ?",
+    message: `${validRecipients.value.length} client(s) recevront le lien par SMS.`,
+    confirmText: "Envoyer"
+  })
+  if (!confirmed) return
 
   sending.value = true
   try {

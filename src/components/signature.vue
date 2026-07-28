@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import SignaturePad from 'signature_pad'
 import { doc, getDoc, updateDoc, getFirestore } from 'firebase/firestore'
 import router from '../router/index'
+import { notify } from '../utils/notifications'
 
 const signatureCanvas = ref(null)
 let signaturePad
@@ -30,7 +31,7 @@ const clearSignature = () => {
 
 const saveSignature = async () => {
   if (signaturePad.isEmpty()) {
-    alert("Merci de signer avant de valider.")
+    notify("Merci de signer avant de valider.", "warning")
     return
   }
 
@@ -39,7 +40,7 @@ const saveSignature = async () => {
   const docSnap = await getDoc(docRef)
 
   if (!docSnap.exists()) {
-    alert("Document introuvable.")
+    notify("Document introuvable.", "error")
     return
   }
 
@@ -58,12 +59,12 @@ const saveSignature = async () => {
   else if (colis[props.colisIndex] && !colis[props.colisIndex].details) {
     colis[props.colisIndex].statutColis = true
   } else {
-    alert("Colis introuvable pour mise à jour.")
+    notify("Colis introuvable pour mise à jour.", "error")
     return
   }
 
   await updateDoc(docRef, { colis })
-  alert("Signature enregistrée et statut mis à jour.")
+  notify("Signature enregistrée et statut mis à jour.", "success")
    router.push({
           path: `/liste/${props.detailId}`
    })

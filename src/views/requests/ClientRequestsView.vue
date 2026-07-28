@@ -8,6 +8,7 @@ import { Check, Search } from "lucide-vue-next"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 import { syncPublicTracking } from "../../utils/publicTracking"
+import { confirmToast } from "../../utils/notifications"
 
 const db = useFirestore()
 const router = useRouter()
@@ -149,7 +150,12 @@ async function fetchRequests() {
 }
 
 async function validateRequest(item) {
-  if (!window.confirm("Valider cette demande et créer le colis ?")) return
+  const confirmed = await confirmToast({
+    title: "Valider la demande ?",
+    message: "La demande sera validée et un nouveau colis sera créé.",
+    confirmText: "Valider"
+  })
+  if (!confirmed) return
   loading.value = true
   try {
     const requestRef = doc(db, "clientRequests", item.id)

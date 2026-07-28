@@ -7,6 +7,7 @@ import CustomersFormView from './customersFormView.vue'
 import { toast } from 'vue3-toastify'
 import { MessageCircle } from 'lucide-vue-next'
 import { PARIS_FRET_ENTREPRISE_ID } from '../../appConfig.js'
+import { confirmToast } from '../../utils/notifications'
 
 const query = ref('')
 const sortAsc = ref(true)
@@ -83,7 +84,13 @@ const createCustomers = async () => {
 
 // ❌ Supprimer un client
 const deleteCustomers = async (id) => {
-  if (confirm('⚠️ Supprimer ce client ?')) {
+  const confirmed = await confirmToast({
+    title: "Supprimer le client ?",
+    message: "Le client sera retiré de votre carnet.",
+    confirmText: "Supprimer",
+    danger: true
+  })
+  if (confirmed) {
     try {
       await customersStore.deleteCustomer(id)
       toast("Client supprimé", {

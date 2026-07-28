@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 import { firebaseApp } from "../../components/firebaseConfig"
+import { confirmToast } from "../../utils/notifications"
 import { generateBordereauPdf } from "../../utils/pdf/bordereauPdf"
 import { generateQrColisPdf } from "../../utils/pdf/qrColisPdf"
 import { parseMoney } from "../../utils/money"
@@ -353,7 +354,12 @@ async function sendSms() {
     return
   }
 
-  if (!window.confirm(`Envoyer ce SMS à ${colis.value.expediteur || "l’expéditeur"} ?`)) return
+  const confirmed = await confirmToast({
+    title: "Envoyer le SMS ?",
+    message: `${colis.value.expediteur || "L’expéditeur"} recevra les informations du colis.`,
+    confirmText: "Envoyer"
+  })
+  if (!confirmed) return
   sending.value = true
 
   try {

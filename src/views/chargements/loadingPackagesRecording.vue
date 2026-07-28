@@ -18,6 +18,7 @@ import { Plane, Trash2, Eye, Plus } from "lucide-vue-next"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 import VoyageFormModal from "../../components/voyages/VoyageFormModal.vue"
+import { confirmToast } from "../../utils/notifications"
 
 const db = useFirestore()
 const authStore = useAuthStore()
@@ -173,7 +174,12 @@ async function createVoyage(payload) {
 }
 
 async function deleteVoyage(id) {
-  const confirmed = confirm("Supprimer ce voyage ?")
+  const confirmed = await confirmToast({
+    title: "Supprimer le voyage ?",
+    message: "Cette action retirera définitivement ce voyage.",
+    confirmText: "Supprimer",
+    danger: true
+  })
 
   if (!confirmed) return
 

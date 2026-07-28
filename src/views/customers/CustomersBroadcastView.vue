@@ -18,6 +18,7 @@ import {
   PARIS_FRET_ENTREPRISE_ID,
   PARIS_FRET_ENTREPRISE_NAME
 } from "../../appConfig"
+import { confirmToast } from "../../utils/notifications"
 
 const db = useFirestore()
 const authStore = useAuthStore()
@@ -202,7 +203,12 @@ async function sendBroadcast() {
     return
   }
 
-  if (!window.confirm(`Envoyer ce SMS à ${recipients.length} client(s) ?`)) return
+  const confirmed = await confirmToast({
+    title: "Confirmer la diffusion",
+    message: `Ce SMS sera envoyé à ${recipients.length} client(s).`,
+    confirmText: "Envoyer"
+  })
+  if (!confirmed) return
 
   sending.value = true
 

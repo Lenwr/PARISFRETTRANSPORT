@@ -16,6 +16,7 @@ import { toast } from "vue3-toastify"
 import { Pencil, Plus, Search, Trash2, X } from "lucide-vue-next"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
+import { confirmToast } from "../../utils/notifications"
 
 const db = useFirestore()
 const authStore = useAuthStore()
@@ -142,7 +143,13 @@ async function toggleArticle(article) {
 }
 
 async function removeArticle(article) {
-  if (!window.confirm(`Supprimer « ${article.nom} » du catalogue ?`)) return
+  const confirmed = await confirmToast({
+    title: "Supprimer l’article ?",
+    message: `« ${article.nom} » sera retiré du catalogue.`,
+    confirmText: "Supprimer",
+    danger: true
+  })
+  if (!confirmed) return
   await deleteDoc(doc(db, "catalogueArticles", article.id))
   await fetchArticles()
   toast("Article supprimé", { type: "success" })
