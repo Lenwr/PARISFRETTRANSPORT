@@ -140,7 +140,7 @@ function partyBox(pdf, title, name, phone, x, y) {
   pdf.setFillColor(255, 255, 255)
   pdf.roundedRect(x, y, 88, 34, 3, 3, "FD")
   sectionTitle(pdf, title, x + 5, y + 9)
-  valueLine(pdf, "Nom", name, x + 5, y + 18, 78)
+  valueLine(pdf, "Nom", name, x + 5, y + 18, 39)
   valueLine(pdf, "Téléphone", phone, x + 49, y + 18, 34)
 }
 

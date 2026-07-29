@@ -1,28 +1,35 @@
 <script setup>
 import Signature from '../components/signature.vue'
-import { useCollection, useFirestore } from "vuefire"
-import { ref, computed } from "vue"
+import { useFirestore } from "vuefire"
+import { onMounted, ref, computed } from "vue"
 import { useRoute } from "vue-router"
-import { collection } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 
 const route = useRoute()
 const detailId = ref(route.params.id)
-const colisIndex = ref(parseInt(route.query.colisIndex))
+const colisIndex = ref(
+  route.query.colisIndex !== undefined ? parseInt(route.query.colisIndex) : null
+)
 const detailIndex = ref(
   route.query.detailIndex !== undefined ? parseInt(route.query.detailIndex) : null
 )
 
 const db = useFirestore()
-const datas = useCollection(collection(db, "enlevements"))
+const client = ref(null)
+const loading = ref(true)
+const deliveryMode = computed(() => route.query.mode === "pickup" ? "pickup" : "delivery")
+const today = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date())
 
-const client = computed(() => {
-  return datas.value.find((detail) => detail.id === detailId.value)
+onMounted(async () => {
+  const snapshot = await getDoc(doc(db, "enlevements", detailId.value))
+  client.value = snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null
+  loading.value = false
 })
 
 // Si c'est un sous-colis (nouveau format avec details)
 const selectedDetail = computed(() => {
   const colis = client.value?.colis || []
-  if (detailIndex.value !== null && colis[colisIndex.value]?.details) {
+  if (Number.isInteger(colisIndex.value) && detailIndex.value !== null && colis[colisIndex.value]?.details) {
     return colis[colisIndex.value].details[detailIndex.value] || null
   }
   return null
@@ -31,61 +38,35 @@ const selectedDetail = computed(() => {
 // Sinon ancien format, on prend le colis directement
 const selectedColis = computed(() => {
   const colis = client.value?.colis || []
+  if (!Number.isInteger(colisIndex.value)) return null
   return colis[colisIndex.value] || null
 })
 </script>
 
 <template>
-  <div class="px-6 pb-[4em] max-w-4xl text-black mx-auto">
-    <h2 class="text-3xl mt-10 font-bold text-gray-800 mb-6">Détail du Colis</h2>
+  <section class="mx-auto max-w-2xl">
+    <p v-if="loading" class="p-10 text-center text-slate-500">Chargement…</p>
+    <div v-else-if="client" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
+      <p class="text-xs font-black uppercase tracking-[0.2em] text-primary">
+        {{ deliveryMode === "pickup" ? "Récupération du colis" : "Réception du colis" }}
+      </p>
+      <h1 class="mt-3 text-3xl font-black">Signature du client</h1>
+      <p class="mt-2 text-slate-500">{{ client.numero || client.id }} · {{ client.destinataire }}</p>
 
-    <div class="bg-white p-6 my-10 rounded-2xl shadow-xl space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <p><span class="font-semibold">Expéditeur :</span> {{ client?.expediteur }}</p>
-          <p><span class="font-semibold">Destinataire :</span> {{ client?.destinataire }}</p>
-          <p><span class="font-semibold">Destination :</span> {{ client?.destination }}</p>
-          <p><span class="font-semibold">Type de Fret :</span> {{ client?.typeDeFret }}</p>
-        </div>
-
-        <div>
-          <p><span class="font-semibold">Téléphone Expéditeur :</span> {{ client?.telephoneExpediteur }}</p>
-          <p><span class="font-semibold">Paiement :</span> {{ client?.modeDePaiement }}</p>
-          <p><span class="font-semibold">Statut Paiement :</span> {{ client?.statut }}</p>
-        </div>
+      <div class="my-8 rounded-2xl bg-slate-50 p-5 text-lg font-bold text-slate-800">
+        Reçu le {{ today }}
       </div>
 
-      <hr class="my-4" />
-
-      <div v-if="selectedColis" class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-        <h3 class="text-xl font-semibold mb-2">Colis sélectionné</h3>
-        <p><span class="font-semibold">Nom :</span> {{ selectedColis.nom }}</p>
-
-        <p v-if="selectedDetail">
-          <span class="font-semibold">Colis :</span> {{ selectedDetail.coli }}<br />
-          <span class="font-semibold">Statut :</span>
-          <span :class="selectedDetail.statutColis ? 'text-green-700' : 'text-yellow-700'" class="font-medium">
-            {{ selectedDetail.statutColis ? 'Livré' : 'En attente' }}
-          </span>
-        </p>
-
-        <p v-else>
-          <span class="font-semibold">Statut :</span>
-          <span :class="selectedColis.statutColis ? 'text-green-700' : 'text-yellow-700'" class="font-medium">
-            {{ selectedColis.statutColis ? 'Livré' : 'En attente' }}
-          </span>
-        </p>
-      </div>
-
-      <div v-else class="text-red-500">Colis introuvable.</div>
-
-      <div class="flex justify-center pt-8">
+      <div class="pt-2">
         <Signature
           :detail-id="detailId"
           :colis-index="colisIndex"
           :detail-index="detailIndex"
+          :default-name="client.destinataire"
+          :delivery-mode="deliveryMode"
         />
       </div>
     </div>
-  </div>
+    <p v-else class="rounded-2xl bg-white p-10 text-center text-red-600">Colis introuvable.</p>
+  </section>
 </template>

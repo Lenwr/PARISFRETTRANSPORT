@@ -32,6 +32,7 @@ const ClientFollowUpView = () => import("../views/customers/ClientFollowUpView.v
 const ClientRequestsView = () => import("../views/requests/ClientRequestsView.vue")
 const PublicClientRequestView = () => import("../views/requests/PublicClientRequestView.vue")
 const ClientRequestThankYouView = () => import("../views/requests/ClientRequestThankYouView.vue")
+const DeliveryScanView = () => import("../views/deliveries/DeliveryScanView.vue")
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -78,6 +79,7 @@ const router = createRouter({
           meta: { authNeeded: true },
         },
         { path: "scan", component: Scan, meta: { authNeeded: true } },
+        { path: "livraisons/scan", component: DeliveryScanView, meta: { authNeeded: true } },
         {
           path: "planing",
           component: PlaningCalendarView,

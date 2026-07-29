@@ -1,12 +1,14 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onBeforeUnmount, onMounted } from 'vue'
 import SignaturePad from 'signature_pad'
-import { doc, getDoc, updateDoc, getFirestore } from 'firebase/firestore'
+import { doc, getDoc, serverTimestamp, updateDoc, getFirestore } from 'firebase/firestore'
 import router from '../router/index'
 import { notify } from '../utils/notifications'
 
 const signatureCanvas = ref(null)
+const signerName = ref("")
 let signaturePad
+let resizeObserver
 
 
 
@@ -16,20 +18,40 @@ const props = defineProps({
   detailIndex: {
     type: Number,
     default: null
-  }
+  },
+  defaultName: { type: String, default: "" },
+  deliveryMode: { type: String, default: "delivery" }
 })
 
 const db = getFirestore()
 
 onMounted(() => {
-  signaturePad = new SignaturePad(signatureCanvas.value)
+  signerName.value = props.defaultName
+  const resizeCanvas = () => {
+    const canvas = signatureCanvas.value
+    const ratio = Math.max(window.devicePixelRatio || 1, 1)
+    canvas.width = canvas.offsetWidth * ratio
+    canvas.height = canvas.offsetHeight * ratio
+    canvas.getContext("2d").scale(ratio, ratio)
+    signaturePad?.clear()
+  }
+  resizeCanvas()
+  signaturePad = new SignaturePad(signatureCanvas.value, { backgroundColor: "#ffffff" })
+  resizeObserver = new ResizeObserver(resizeCanvas)
+  resizeObserver.observe(signatureCanvas.value)
 })
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 const clearSignature = () => {
   signaturePad.clear()
 }
 
 const saveSignature = async () => {
+  if (!signerName.value.trim()) {
+    notify("Merci d’indiquer le nom de la personne qui reçoit le colis.", "warning")
+    return
+  }
   if (signaturePad.isEmpty()) {
     notify("Merci de signer avant de valider.", "warning")
     return
@@ -49,6 +71,7 @@ const saveSignature = async () => {
 
   // ✅ Nouveau format (avec sous-colis)
   if (
+    Number.isInteger(props.colisIndex) &&
     props.detailIndex !== null &&
     colis[props.colisIndex]?.details &&
     colis[props.colisIndex].details[props.detailIndex]
@@ -56,15 +79,25 @@ const saveSignature = async () => {
     colis[props.colisIndex].details[props.detailIndex].statutColis = true
   }
   // 🟡 Ancien format (pas de sous-colis)
-  else if (colis[props.colisIndex] && !colis[props.colisIndex].details) {
+  else if (Number.isInteger(props.colisIndex) && colis[props.colisIndex] && !colis[props.colisIndex].details) {
     colis[props.colisIndex].statutColis = true
-  } else {
-    notify("Colis introuvable pour mise à jour.", "error")
-    return
   }
 
-  await updateDoc(docRef, { colis })
-  notify("Signature enregistrée et statut mis à jour.", "success")
+  const proof = {
+    nom: signerName.value.trim(),
+    mode: props.deliveryMode,
+    signature: signatureDataUrl,
+    date: new Date().toISOString()
+  }
+  const payload = {
+    colis,
+    deliveryStatus: props.deliveryMode === "pickup" ? "Récupéré" : "Livré",
+    preuveLivraison: proof,
+    deliveredAt: serverTimestamp()
+  }
+
+  await updateDoc(docRef, payload)
+  notify(props.deliveryMode === "pickup" ? "Récupération signée." : "Livraison signée.", "success")
    router.push({
           path: `/liste/${props.detailId}`
    })
@@ -72,12 +105,20 @@ const saveSignature = async () => {
 </script>
 
 <template>
-  <div class="space-y-4 text-center">
-    <canvas ref="signatureCanvas" class="border border-gray-300 rounded-md w-full h-48"></canvas>
+  <div class="w-full space-y-5">
+    <label class="block text-left">
+      <span class="mb-2 block text-sm font-black text-slate-700">Nom de la personne qui reçoit</span>
+      <input v-model="signerName" class="input input-bordered w-full rounded-xl bg-white" autocomplete="name" placeholder="Écrire le nom" />
+    </label>
 
-    <div class="flex justify-center gap-4">
-      <button @click="clearSignature" class="bg-gray-500 text-white px-4 py-2 rounded-lg">Effacer</button>
-      <button @click="saveSignature" class="bg-green-600 text-white px-4 py-2 rounded-lg">Valider</button>
+    <div>
+      <p class="mb-2 text-left text-sm font-black text-slate-700">Signature</p>
+      <canvas ref="signatureCanvas" class="h-52 w-full touch-none rounded-xl border border-slate-300 bg-white"></canvas>
+    </div>
+
+    <div class="flex flex-col gap-3 sm:flex-row">
+      <button @click="clearSignature" class="btn flex-1 rounded-xl bg-slate-100">Effacer</button>
+      <button @click="saveSignature" class="btn flex-1 rounded-xl bg-emerald-600 text-white">Valider la signature</button>
     </div>
   </div>
 </template>

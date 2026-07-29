@@ -18,7 +18,8 @@ import {
   MessageCircle,
   Ship,
   BookOpen,
-  Bell
+  Bell,
+  ScanLine
 } from "lucide-vue-next"
 import { useAuthStore } from "../stores/useAuthStore"
 import PageLoader from "../components/PageLoader.vue"
@@ -50,6 +51,7 @@ const navLinks = [
   { to: "/catalogue", icon: BookOpen, label: "Catalogue" },
   { to: "/suivi-clients", icon: MessageCircle, label: "Suivi clients" },
   { to: "/demandes", icon: Bell, label: "Demandes" },
+  { to: "/livraisons/scan", icon: ScanLine, label: "Scan livraison" },
   { to: "/recording", icon: Truck, label: "Départs" },
   { to: "/planing", icon: CalendarDays, label: "Planning", superAdminOnly: true },
   { to: "/factures", icon: FileText, label: "Factures" },
@@ -76,6 +78,7 @@ const routePreloaders = {
   "/catalogue": () => import("../views/catalogue/CatalogueView.vue"),
   "/suivi-clients": () => import("../views/customers/ClientFollowUpView.vue"),
   "/demandes": () => import("../views/requests/ClientRequestsView.vue"),
+  "/livraisons/scan": () => import("../views/deliveries/DeliveryScanView.vue"),
   "/recording": () => import("../views/chargements/loadingPackagesRecording.vue"),
   "/planing": () => import("../views/planingCalendarView.vue"),
   "/factures": () => import("../views/factures/InvoicesQuotesView.vue"),
@@ -93,6 +96,7 @@ const activeGroups = {
   "/catalogue": ["/catalogue"],
   "/suivi-clients": ["/suivi-clients"],
   "/demandes": ["/demandes"],
+  "/livraisons/scan": ["/livraisons/scan", "/sign"],
   "/recording": ["/recording", "/chargementsDetails"],
   "/planing": ["/planing"],
   "/factures": ["/factures"],
