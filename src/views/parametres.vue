@@ -27,6 +27,7 @@ import {
 } from "firebase/storage"
 import { firebaseApp } from "../components/firebaseConfig"
 import { PARIS_FRET_ENTREPRISE_ID } from "../appConfig"
+import { DEFAULT_SALES_TERMS } from "../utils/pdf/defaultSalesTerms"
 
 const store = useAuthStore()
 const router = useRouter()
@@ -58,7 +59,8 @@ const entrepriseForm = ref({
   subscriptionStatus: "active",
   plan: "free",
 
-  logoUrl: ""
+  logoUrl: "",
+  conditionsGeneralesVente: DEFAULT_SALES_TERMS
 })
 
 const logoPreview = ref(null)
@@ -112,7 +114,8 @@ async function fetchEntrepriseData() {
       prenom: data.prenom || data.firstName || "",
       raisonSociale: data.raisonSociale || data.nom || "",
       typeCompte: data.typeCompte || "professionnel",
-      pays: data.pays || "France"
+      pays: data.pays || "France",
+      conditionsGeneralesVente: data.conditionsGeneralesVente || DEFAULT_SALES_TERMS
     }
 
     logoPreview.value = entrepriseForm.value.logoUrl || null
@@ -190,6 +193,8 @@ async function updateEntreprise() {
       adresse: buildFullAddress(),
 
       codeParrainage: entrepriseForm.value.codeParrainage,
+
+      conditionsGeneralesVente: entrepriseForm.value.conditionsGeneralesVente.trim(),
 
       logoUrl: logoURL,
       updatedAt: serverTimestamp()
@@ -518,6 +523,21 @@ onMounted(async () => {
             placeholder="Code interne"
             class="input input-bordered w-full rounded-2xl"
           />
+        </div>
+
+        <div class="mt-8 md:col-span-2">
+          <label class="mb-2 block text-sm font-semibold text-slate-700">
+            Conditions générales de vente du bordereau
+          </label>
+          <textarea
+            v-model="entrepriseForm.conditionsGeneralesVente"
+            rows="18"
+            class="textarea textarea-bordered w-full rounded-2xl font-sans leading-relaxed"
+            placeholder="Saisissez les conditions générales affichées sur le bordereau client"
+          ></textarea>
+          <p class="mt-2 text-xs text-slate-400">
+            Ce texte est ajouté sur une ou plusieurs pages à la fin du bordereau PDF.
+          </p>
         </div>
 
         <div class="mt-8 md:col-span-2">

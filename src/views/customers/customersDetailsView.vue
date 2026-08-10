@@ -17,7 +17,6 @@ import Form from '../liste/form.vue'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { PARIS_FRET_ENTREPRISE_ID } from '../../appConfig'
 import { parseMoney } from '../../utils/money'
-import { syncPublicTracking } from '../../utils/publicTracking'
 
 const route = useRoute()
 const db = useFirestore()
@@ -168,16 +167,6 @@ async function send() {
 
     const enlevementsCollection = collection(db, 'enlevements')
     const newDocumentRef = await addDoc(enlevementsCollection, Data)
-
-    await syncPublicTracking(
-      db,
-      {
-        ...Data,
-        id: newDocumentRef.id
-      },
-      authStore.entreprise,
-      newDocumentRef.id
-    )
 
     toast("Formulaire envoyé", {
       theme: "auto",

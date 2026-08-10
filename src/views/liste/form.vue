@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue"
 import { useRouter } from "vue-router"
-import { collection, addDoc, getDocs, query, serverTimestamp, where } from "firebase/firestore"
+import { collection, addDoc, doc, getDocs, query, runTransaction, serverTimestamp, where } from "firebase/firestore"
 import { useFirestore } from "vuefire"
 import { toast } from "vue3-toastify"
 import "vue3-toastify/dist/index.css"
@@ -10,7 +10,6 @@ import { Plus, Trash2, Save } from "lucide-vue-next"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 import { parseMoney } from "../../utils/money"
-import { syncPublicTracking } from "../../utils/publicTracking"
 
 const db = useFirestore()
 const router = useRouter()
@@ -47,6 +46,8 @@ const indicatifs = [
 ]
 
 const destinations = ref([
+  "Yaoundé",
+  "Douala",
   "Cameroun",
   "Togo",
   "Côte d'Ivoire",
@@ -59,6 +60,7 @@ const destinations = ref([
   "France",
   "États-Unis"
 ])
+const defaultDestinations = [...destinations.value]
 
 const customDestination = ref("")
 const loading = ref(false)
@@ -94,6 +96,7 @@ const form = ref({
 
   statut: "Non Payé",
   prix: "",
+  avance: "",
   resteAPayer: "",
   modeDePaiement: "Espèces",
   poidsTotal: "",
@@ -165,23 +168,42 @@ function formatPrix(value) {
 watch(totalCatalogue, value => {
   if (!tarifCatalogueActif.value) return
   form.value.prix = Number(value || 0).toFixed(2)
-  if (form.value.statut === "Non Payé") form.value.resteAPayer = Number(value || 0).toFixed(2)
-  if (form.value.statut === "Payé") form.value.resteAPayer = "0.00"
 })
 
-watch(() => form.value.statut, statut => {
-  if (statut === "Payé") form.value.resteAPayer = "0.00"
-  if (statut === "Non Payé" && tarifCatalogueActif.value) {
-    form.value.resteAPayer = totalCatalogue.value.toFixed(2)
+watch(
+  [() => form.value.prix, () => form.value.avance],
+  ([prix, avance]) => {
+    const total = Math.max(0, parseMoney(prix))
+    const montantAvance = Math.min(Math.max(0, parseMoney(avance)), total)
+    const reste = Math.max(0, total - montantAvance)
+
+    form.value.resteAPayer = reste.toFixed(2)
+    form.value.statut = montantAvance <= 0
+      ? "Non Payé"
+      : reste <= 0
+        ? "Payé"
+        : "Reste à payer"
+  },
+  { immediate: true }
+)
+
+function destinationCode(destination) {
+  const normalized = String(destination || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+
+  const codes = {
+    YAOUNDE: "YDE",
+    DOUALA: "DLA"
   }
-})
+
+  return codes[normalized] || normalized.slice(0, 3).padEnd(3, "X")
+}
 
 function generatePackageId() {
   return `PKG-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
-}
-
-function generateNumero() {
-  return `COL-${Date.now()}`
 }
 
 function normalizePhone(indicatif, phone) {
@@ -198,17 +220,70 @@ function normalizePhone(indicatif, phone) {
   return `${indicatif}${cleaned.replace(/^0+/, "")}`
 }
 
-function addDestination() {
+async function fetchDestinations() {
+  if (!entrepriseId.value) return
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, "destinations"),
+      where("entrepriseId", "==", entrepriseId.value)
+    ))
+    const storedDestinations = snap.docs
+      .map(item => String(item.data().nom || "").trim())
+      .filter(Boolean)
+
+    destinations.value = [...new Set([...defaultDestinations, ...storedDestinations])]
+      .sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }))
+  } catch (error) {
+    console.error("Erreur chargement destinations :", error)
+    toast("Impossible de charger les destinations", { type: "error", autoClose: 1500 })
+  }
+}
+
+async function addDestination() {
   const value = customDestination.value.trim()
 
   if (!value) return
 
-  if (!destinations.value.includes(value)) {
-    destinations.value.push(value)
+  const existing = destinations.value.find(destination =>
+    destination.localeCompare(value, "fr", { sensitivity: "base" }) === 0
+  )
+
+  if (existing) {
+    form.value.destination = existing
+    customDestination.value = ""
+    toast("Destination déjà existante", { type: "info", autoClose: 1200 })
+    return
   }
 
-  form.value.destination = value
-  customDestination.value = ""
+  if (!entrepriseId.value) {
+    toast("Entreprise introuvable", { type: "error", autoClose: 1500 })
+    return
+  }
+
+  try {
+    await addDoc(collection(db, "destinations"), {
+      nom: value,
+      entrepriseId: entrepriseId.value,
+      active: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    })
+
+    destinations.value.push(value)
+    destinations.value.sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }))
+    form.value.destination = value
+    customDestination.value = ""
+    toast("Destination enregistrée", { type: "success", autoClose: 1200 })
+  } catch (error) {
+    console.error("Erreur ajout destination :", error)
+    toast(
+      error.code === "permission-denied"
+        ? "Vous n’avez pas l’autorisation d’ajouter cette destination"
+        : "Impossible d’enregistrer la destination",
+      { type: "error", autoClose: 1800 }
+    )
+  }
 }
 
 function addColis() {
@@ -330,7 +405,6 @@ async function submit() {
       : 0
 
     const data = {
-      numero: generateNumero(),
 
       expediteur: form.value.expediteur,
       telephoneExpediteur: normalizePhone(
@@ -366,6 +440,10 @@ async function submit() {
 
       statut: form.value.statut,
       prix: parseMoney(form.value.prix),
+      avance: Math.min(
+        Math.max(0, parseMoney(form.value.avance)),
+        Math.max(0, parseMoney(form.value.prix))
+      ),
       resteAPayer: parseMoney(form.value.resteAPayer),
       modeDePaiement: form.value.modeDePaiement,
 
@@ -380,21 +458,27 @@ async function submit() {
       createdAt: serverTimestamp()
     }
 
-    const docRef = await addDoc(collection(db, "enlevements"), data)
+    const code = destinationCode(form.value.destination)
+    const counterRef = doc(db, "entreprises", entrepriseId.value)
+    const enlevementRef = doc(collection(db, "enlevements"))
 
-    await syncPublicTracking(
-      db,
-      {
-        ...data,
-        id: docRef.id
-      },
-      authStore.entreprise,
-      docRef.id
-    )
+    await runTransaction(db, async transaction => {
+      const counterSnap = await transaction.get(counterRef)
+      const counters = counterSnap.data()?.bordereauCounters || {}
+      const nextNumber = Number(counters[code] || 0) + 1
+      const numero = `BOR ${code} ${String(nextNumber).padStart(6, "0")}`
+
+      transaction.update(counterRef, {
+        [`bordereauCounters.${code}`]: nextNumber,
+        updatedAt: serverTimestamp()
+      })
+
+      transaction.set(enlevementRef, { ...data, numero })
+    })
 
     toast("Colis enregistré", { type: "success", autoClose: 1200 })
 
-    router.push(`/liste/${docRef.id}`)
+    router.push(`/liste/${enlevementRef.id}`)
   } catch (error) {
     console.error(error)
     toast("Erreur lors de l’enregistrement", {
@@ -406,7 +490,10 @@ async function submit() {
   }
 }
 
-onMounted(fetchCatalogue)
+onMounted(() => {
+  fetchCatalogue()
+  fetchDestinations()
+})
 </script>
 
 <template>
@@ -570,7 +657,7 @@ onMounted(fetchCatalogue)
           </div>
 
           <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <select v-model="form.statut" class="select select-bordered rounded-2xl">
+            <select v-model="form.statut" disabled class="select select-bordered rounded-2xl bg-slate-50">
               <option>Non Payé</option>
               <option>Reste à payer</option>
               <option>Payé</option>
@@ -589,8 +676,17 @@ onMounted(fetchCatalogue)
                 placeholder="Prix" />
             </label>
 
-            <input v-model="form.resteAPayer" inputmode="decimal"
-              class="input input-bordered rounded-2xl" placeholder="Reste à payer" />
+            <label>
+              <span class="mb-1 block text-xs font-bold text-slate-500">Avance versée</span>
+              <input v-model="form.avance" inputmode="decimal"
+                class="input input-bordered w-full rounded-2xl" placeholder="Avance" />
+            </label>
+
+            <label class="md:col-start-2">
+              <span class="mb-1 block text-xs font-bold text-slate-500">Reste à payer calculé</span>
+              <input v-model="form.resteAPayer" readonly inputmode="decimal"
+                class="input input-bordered w-full rounded-2xl bg-slate-50" placeholder="Reste à payer" />
+            </label>
           </div>
         </div>
 

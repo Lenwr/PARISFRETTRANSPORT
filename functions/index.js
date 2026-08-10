@@ -3,12 +3,42 @@ const cors = require("cors")({ origin: true })
 const twilio = require("twilio")
 const admin = require("firebase-admin")
 const crypto = require("crypto")
+const { defineSecret } = require("firebase-functions/params")
+const { onDocumentWritten } = require("firebase-functions/v2/firestore")
+const { archiveShipment, syncShipment } = require("./tracking")
 
 if (!admin.apps.length) {
   admin.initializeApp()
 }
 
 const db = admin.firestore()
+const trackingApiKey = defineSecret("TRACKING_API_KEY")
+
+exports.syncShipmentToTracksend = onDocumentWritten(
+  {
+    document: "enlevements/{shipmentId}",
+    secrets: [trackingApiKey]
+  },
+  async event => {
+    const change = event.data
+    if (!change) return null
+
+    const before = change.before.exists ? change.before.data() : null
+    const after = change.after.exists ? change.after.data() : null
+    const shipment = after || before
+
+    if (!shipment?.numero) return null
+
+    if (!after) return archiveShipment(shipment.numero)
+
+    const companySnap = shipment.entrepriseId
+      ? await db.collection("entreprises").doc(shipment.entrepriseId).get()
+      : null
+    const company = companySnap?.exists ? companySnap.data() : {}
+
+    return syncShipment(after, company)
+  }
+)
 
 const twilioNumber = process.env.TWILIO_NUMBER
 const twilioSenderId = process.env.TWILIO_SENDER_ID

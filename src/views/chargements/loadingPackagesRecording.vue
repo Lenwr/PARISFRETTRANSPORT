@@ -6,6 +6,7 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  updateDoc,
   query,
   where,
   getDocs,
@@ -13,7 +14,7 @@ import {
 } from "firebase/firestore"
 import { toast } from "vue3-toastify"
 import "vue3-toastify/dist/index.css"
-import { Plane, Trash2, Eye, Plus } from "lucide-vue-next"
+import { Plane, Trash2, Eye, Plus, Pencil, Save, X } from "lucide-vue-next"
 
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
@@ -29,6 +30,9 @@ const entrepriseId = computed(() =>
 
 const modalOpen = ref(false)
 const destinations = ref([])
+const editingVoyageId = ref("")
+const editedVoyageName = ref("")
+const savingVoyageName = ref(false)
 
 const voyagesQuery = computed(() => {
   if (!entrepriseId.value) return null
@@ -200,6 +204,55 @@ async function deleteVoyage(id) {
   }
 }
 
+function voyageName(voyage) {
+  return String(voyage?.numeroVol || voyage?.contenaire || "").trim()
+}
+
+function startEditingVoyage(voyage) {
+  editingVoyageId.value = voyage.id
+  editedVoyageName.value = voyageName(voyage)
+}
+
+function cancelEditingVoyage() {
+  editingVoyageId.value = ""
+  editedVoyageName.value = ""
+}
+
+async function saveVoyageName(voyage) {
+  const value = editedVoyageName.value.trim()
+
+  if (!value) {
+    toast("Le nom du conteneur est obligatoire", {
+      type: "warning",
+      autoClose: 1500
+    })
+    return
+  }
+
+  if (voyage.entrepriseId !== entrepriseId.value) {
+    toast("Chargement inaccessible", { type: "error", autoClose: 1500 })
+    return
+  }
+
+  savingVoyageName.value = true
+
+  try {
+    await updateDoc(doc(db, "chargements", voyage.id), {
+      numeroVol: value,
+      contenaire: value,
+      updatedAt: serverTimestamp()
+    })
+
+    cancelEditingVoyage()
+    toast("Nom du conteneur modifié", { type: "success", autoClose: 1200 })
+  } catch (error) {
+    console.error(error)
+    toast("Impossible de modifier le conteneur", { type: "error", autoClose: 1500 })
+  } finally {
+    savingVoyageName.value = false
+  }
+}
+
 function formatDate(value) {
   if (!value) return "-"
 
@@ -258,9 +311,50 @@ function formatDate(value) {
                 {{ voyage.typeVoyage || "Voyage" }}
               </p>
 
-              <h2 class="mt-1 text-xl font-bold text-slate-900">
-                {{ voyage.numeroVol || voyage.contenaire || "Sans numéro" }}
-              </h2>
+              <form
+                v-if="editingVoyageId === voyage.id"
+                class="mt-2 flex items-center gap-2"
+                @submit.prevent="saveVoyageName(voyage)"
+              >
+                <input
+                  v-model="editedVoyageName"
+                  class="input input-bordered input-sm min-w-0 flex-1 rounded-xl"
+                  maxlength="120"
+                  autofocus
+                  aria-label="Nouveau nom du conteneur"
+                />
+                <button
+                  type="submit"
+                  class="btn btn-success btn-sm btn-square text-white"
+                  :disabled="savingVoyageName"
+                  aria-label="Enregistrer le nom"
+                >
+                  <Save class="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm btn-square"
+                  :disabled="savingVoyageName"
+                  aria-label="Annuler la modification"
+                  @click="cancelEditingVoyage"
+                >
+                  <X class="h-4 w-4" />
+                </button>
+              </form>
+
+              <div v-else class="mt-1 flex items-center gap-2">
+                <h2 class="min-w-0 truncate text-xl font-bold text-slate-900">
+                  {{ voyageName(voyage) || "Sans numéro" }}
+                </h2>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square shrink-0 text-slate-500"
+                  aria-label="Modifier le nom du conteneur"
+                  @click="startEditingVoyage(voyage)"
+                >
+                  <Pencil class="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               <p class="text-sm text-slate-500">
                 {{ voyage.destination || "-" }}
@@ -313,7 +407,7 @@ function formatDate(value) {
       v-model="modalOpen"
       :destinations="destinations"
       @save="createVoyage"
-      @addDestination="createDestination"
+      @add-destination="createDestination"
     />
   </section>
 </template>

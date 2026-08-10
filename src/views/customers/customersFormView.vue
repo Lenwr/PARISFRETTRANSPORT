@@ -35,8 +35,6 @@ const Liste = useCollection(customersQuery)
 const customer = ref({
   nom: '',
   prenom: '',
-  adresse: '',
-  codePostal: '',
   telephone: '',
   smsConsent: true,
   envois: [{ expediteur: '', colis: '' }],
@@ -48,8 +46,6 @@ const resetForm = () => {
   Object.assign(customer.value, {
     nom: '',
     prenom: '',
-    adresse: '',
-    codePostal: '',
     telephone: '',
     smsConsent: true,
     envois: [{ expediteur: '', colis: '' }],
@@ -176,18 +172,6 @@ const selectItem = (item) => {
         <div>
           <label for="prenom" class="block text-sm font-medium text-gray-900">Prénoms</label>
           <input id="prenom" v-model="customer.prenom" class="input-style" placeholder="Prénoms" />
-        </div>
-
-        <!-- ADRESSE -->
-        <div>
-          <label for="adresse" class="block text-sm font-medium text-gray-900">Adresse</label>
-          <input id="adresse" v-model="customer.adresse" class="input-style" placeholder="Adresse" />
-        </div>
-
-        <!-- CODE POSTAL -->
-        <div>
-          <label for="codePostal" class="block text-sm font-medium text-gray-900">Code Postal</label>
-          <input id="codePostal" v-model="customer.codePostal" class="input-style" placeholder="75000, 95500..." />
         </div>
 
         <!-- TELEPHONE -->

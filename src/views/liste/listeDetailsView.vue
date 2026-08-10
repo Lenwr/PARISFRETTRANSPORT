@@ -2,7 +2,7 @@
 import { computed, ref, watch, nextTick } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDocument, useFirestore } from "vuefire"
-import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { doc, getDoc, runTransaction, serverTimestamp, updateDoc, deleteDoc } from "firebase/firestore"
 import { toast } from "vue3-toastify"
 import "vue3-toastify/dist/index.css"
 
@@ -26,11 +26,10 @@ import { firebaseApp } from "../../components/firebaseConfig"
 import { confirmToast } from "../../utils/notifications"
 import { generateBordereauPdf } from "../../utils/pdf/bordereauPdf"
 import { generateQrColisPdf } from "../../utils/pdf/qrColisPdf"
+import { generateColisInvoicePdf } from "../../utils/pdf/colisInvoicePdf"
 import { parseMoney } from "../../utils/money"
 import {
-  deletePublicTracking,
   publicTrackingUrl,
-  syncPublicTracking,
   trackingSlug
 } from "../../utils/publicTracking"
 import EditEnlevementModal from "../../components/enlevements/EditEnlevementModal.vue"
@@ -172,26 +171,6 @@ async function fetchEntreprise() {
   }
 }
 
-async function syncCurrentPublicTracking(overrides = {}) {
-  if (!entreprise.value) {
-    await fetchEntreprise()
-  }
-
-  await syncPublicTracking(
-    db,
-    {
-      ...colis.value,
-      ...overrides,
-      id: id.value
-    },
-    {
-      id: entrepriseId.value,
-      ...entreprise.value
-    },
-    id.value
-  )
-}
-
 function formatDateTime(value) {
   if (!value) return "-"
 
@@ -205,10 +184,6 @@ async function updateDeliveryStatus() {
     await updateDoc(doc(db, "enlevements", id.value), {
       deliveryStatus: colis.value.deliveryStatus,
       updatedAt: new Date()
-    })
-
-    await syncCurrentPublicTracking({
-      deliveryStatus: colis.value.deliveryStatus
     })
 
     toast("Statut mis à jour", {
@@ -236,8 +211,6 @@ async function updateColis(payload) {
       ...colis.value,
       ...payload
     }
-
-    await syncCurrentPublicTracking(payload)
 
     editOpen.value = false
 
@@ -271,13 +244,6 @@ async function quickSavePaiement() {
     colis.value.prix = prix
     colis.value.resteAPayer = resteAPayer
 
-    await syncCurrentPublicTracking({
-      statut: colis.value.statut,
-      prix,
-      resteAPayer,
-      modeDePaiement: colis.value.modeDePaiement
-    })
-
     toast("Paiement mis à jour", {
       type: "success",
       autoClose: 1200
@@ -294,11 +260,6 @@ async function quickSavePaiement() {
 
 async function deleteColis() {
   try {
-    await deletePublicTracking(db, colis.value, {
-      id: entrepriseId.value,
-      ...entreprise.value
-    })
-
     await deleteDoc(doc(db, "enlevements", id.value))
 
     toast("Colis supprimé", {
@@ -317,10 +278,63 @@ async function deleteColis() {
   }
 }
 
+function destinationCode(destination) {
+  const normalized = String(destination || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+
+  return {
+    YAOUNDE: "YDE",
+    DOUALA: "DLA"
+  }[normalized] || normalized.slice(0, 3).padEnd(3, "X")
+}
+
+async function ensureBordereauNumero() {
+  if (/^BOR\s+[A-Z0-9]{3}\s+\d{6}$/.test(String(colis.value.numero || ""))) {
+    return colis.value.numero
+  }
+
+  const code = destinationCode(colis.value.destination)
+  const entrepriseRef = doc(db, "entreprises", entrepriseId.value)
+  const colisRef = doc(db, "enlevements", id.value)
+
+  const numero = await runTransaction(db, async transaction => {
+    const [entrepriseSnap, colisSnap] = await Promise.all([
+      transaction.get(entrepriseRef),
+      transaction.get(colisRef)
+    ])
+    const existingNumero = colisSnap.data()?.numero
+
+    if (/^BOR\s+[A-Z0-9]{3}\s+\d{6}$/.test(String(existingNumero || ""))) {
+      return existingNumero
+    }
+
+    const counters = entrepriseSnap.data()?.bordereauCounters || {}
+    const nextNumber = Number(counters[code] || 0) + 1
+    const nextNumero = `BOR ${code} ${String(nextNumber).padStart(6, "0")}`
+
+    transaction.update(entrepriseRef, {
+      [`bordereauCounters.${code}`]: nextNumber,
+      updatedAt: serverTimestamp()
+    })
+    transaction.update(colisRef, {
+      numero: nextNumero,
+      updatedAt: serverTimestamp()
+    })
+
+    return nextNumero
+  })
+
+  colis.value.numero = numero
+  return numero
+}
+
 async function generatePDF() {
 
   try {
-    await syncCurrentPublicTracking()
+    await ensureBordereauNumero()
     await nextTick()
 
     await generateBordereauPdf({
@@ -342,10 +356,29 @@ async function generatePDF() {
 }
 
 async function generateQrPDF() {
+  await ensureBordereauNumero()
   await nextTick()
   await generateQrColisPdf(colis.value, {
     entreprise: entreprise.value
   })
+}
+
+async function generateInvoicePDF() {
+  try {
+    await ensureBordereauNumero()
+    await nextTick()
+    await generateColisInvoicePdf({
+      colis: colis.value,
+      entreprise: {
+        id: entrepriseId.value,
+        ...entreprise.value
+      }
+    })
+    toast("Facture générée", { type: "success", autoClose: 1200 })
+  } catch (error) {
+    console.error(error)
+    toast("Erreur génération facture", { type: "error", autoClose: 1500 })
+  }
 }
 
 async function sendSms() {
@@ -528,6 +561,65 @@ async function sendSms() {
             </div>
           </div>
 
+          <div class="overflow-hidden rounded-3xl bg-white shadow-sm">
+            <div class="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-primary">Document commercial</p>
+                <h2 class="mt-2 text-lg font-bold text-slate-900">Facture du colis</h2>
+                <p class="mt-1 text-sm text-slate-500">Facture sécurisée avec filigrane anti-falsification.</p>
+              </div>
+              <button class="btn rounded-2xl bg-slate-950 text-white" @click="generateInvoicePDF">
+                <FileText class="h-4 w-4" />
+                Télécharger la facture
+              </button>
+            </div>
+
+            <div class="relative overflow-hidden p-6">
+              <div class="pointer-events-none absolute inset-0 flex rotate-[-28deg] items-center justify-center text-7xl font-black tracking-[0.18em] text-primary/[0.045]">
+                {{ (entreprise?.nom || "PFT").split(/\s+/).map(word => word[0]).join("").slice(0, 5).toUpperCase() }}
+              </div>
+              <div class="relative grid gap-5 sm:grid-cols-2">
+                <div>
+                  <p class="text-xs font-bold uppercase text-slate-400">Facture adressée à</p>
+                  <p class="mt-2 font-black text-slate-900">{{ colis.expediteur || "-" }}</p>
+                  <p class="text-sm text-slate-500">{{ colis.telephoneExpediteur || "-" }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-bold uppercase text-slate-400">Destinée à</p>
+                  <p class="mt-2 font-black text-slate-900">{{ colis.destinataire || "-" }}</p>
+                  <p class="text-sm text-slate-500">{{ colis.telephoneDestinataire || "-" }} · {{ colis.destination || "-" }}</p>
+                </div>
+              </div>
+
+              <div class="relative mt-6 overflow-x-auto rounded-2xl border border-slate-200">
+                <table class="w-full min-w-[560px] text-left text-sm">
+                  <thead class="bg-yellow-50 text-xs uppercase text-slate-600">
+                    <tr>
+                      <th class="px-4 py-3">Colis</th>
+                      <th class="px-4 py-3">Description</th>
+                      <th class="px-4 py-3 text-center">Quantité</th>
+                      <th class="px-4 py-3 text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, index) in colis.colis" :key="index" class="border-t border-slate-100">
+                      <td class="px-4 py-3 font-bold">{{ item.nom || "Colis" }}</td>
+                      <td class="px-4 py-3 text-slate-500">{{ item.description || item.typeTarif || colis.typeDeFret }}</td>
+                      <td class="px-4 py-3 text-center">{{ item.quantite || 1 }}</td>
+                      <td class="px-4 py-3 text-right">{{ item.totalLigne || "-" }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="relative ml-auto mt-5 w-full max-w-xs overflow-hidden rounded-2xl border border-slate-200 text-sm">
+                <div class="flex justify-between px-4 py-3"><span class="font-bold">Total</span><span>{{ colis.prix || 0 }}</span></div>
+                <div class="flex justify-between border-t px-4 py-3"><span class="font-bold">Avance</span><span>{{ Math.max(0, parseMoney(colis.prix) - parseMoney(colis.resteAPayer)) }}</span></div>
+                <div class="flex justify-between border-t bg-yellow-50 px-4 py-3"><span class="font-black">Net à régler</span><span class="font-black">{{ colis.resteAPayer || 0 }}</span></div>
+              </div>
+            </div>
+          </div>
+
           <div class="hidden">
             <div id="mainQr">
               <QrcodeVue :value="trackingLink" :size="300" level="H" />
@@ -556,6 +648,11 @@ async function sendSms() {
             <button class="btn btn-outline w-full rounded-2xl" @click="generateQrPDF">
               <QrCode class="h-4 w-4" />
               QR colis
+            </button>
+
+            <button class="btn btn-outline w-full rounded-2xl" @click="generateInvoicePDF">
+              <FileText class="h-4 w-4" />
+              Facture PDF
             </button>
 
             <button class="btn btn-outline w-full rounded-2xl" :disabled="sending" @click="sendSms">

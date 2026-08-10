@@ -9,6 +9,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  writeBatch,
   where
 } from "firebase/firestore"
 import { useFirestore } from "vuefire"
@@ -44,6 +45,21 @@ const emptyArticle = () => ({
 
 const form = ref(emptyArticle())
 
+const baseCatalogue = [
+  { nom: "Congélateur bahut", unite: "Pièce" },
+  { nom: "Canapé 3 places", unite: "Pièce" },
+  { nom: "Transport M3", unite: "m³" },
+  { nom: "Cuisinière", unite: "Pièce" },
+  { nom: "Carton 67×54×54", unite: "Carton" },
+  { nom: "Réfrigérateur 2 portes / Américain", unite: "Pièce" },
+  { nom: "Matelas 2 places", unite: "Pièce" },
+  { nom: "Réfrigérateur 1 porte", unite: "Pièce" },
+  { nom: "Télévision neuve", unite: "Pouce" },
+  { nom: "Matelas 1 place", unite: "Pièce" },
+  { nom: "Petit carton 60×40×40", unite: "Carton" },
+  { nom: "Machine à laver", unite: "Pièce" }
+]
+
 const filteredArticles = computed(() => {
   const term = search.value.trim().toLowerCase()
   if (!term) return articles.value
@@ -69,6 +85,54 @@ async function fetchArticles() {
     toast("Impossible de charger le catalogue", { type: "error" })
   } finally {
     loading.value = false
+  }
+}
+
+function normalizedName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+}
+
+async function ensureBaseCatalogue() {
+  if (!entrepriseId.value) return
+
+  const existingNames = new Set(articles.value.map(article => normalizedName(article.nom)))
+  const missingArticles = baseCatalogue.filter(article => !existingNames.has(normalizedName(article.nom)))
+  if (!missingArticles.length) return
+
+  try {
+    const batch = writeBatch(db)
+
+    missingArticles.forEach((article, index) => {
+      const articleRef = doc(collection(db, "catalogueArticles"))
+      batch.set(articleRef, {
+        ...article,
+        categorie: "Général",
+        typeTarif: "libre",
+        prixUnitaire: 0,
+        prixParM3: 0,
+        ordre: 100 + index,
+        actif: true,
+        catalogueBase: true,
+        entrepriseId: entrepriseId.value,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      })
+    })
+
+    await batch.commit()
+    await fetchArticles()
+    toast(`${missingArticles.length} article(s) ajouté(s) au catalogue`, {
+      type: "success",
+      autoClose: 1800
+    })
+  } catch (error) {
+    console.error("Erreur import catalogue de base :", error)
+    toast("Impossible d’ajouter le catalogue de base", { type: "error" })
   }
 }
 
@@ -155,7 +219,10 @@ async function removeArticle(article) {
   toast("Article supprimé", { type: "success" })
 }
 
-onMounted(fetchArticles)
+onMounted(async () => {
+  await fetchArticles()
+  await ensureBaseCatalogue()
+})
 </script>
 
 <template>
@@ -197,8 +264,9 @@ onMounted(fetchArticles)
         <span class="text-sm text-slate-600">{{ article.categorie }}</span>
         <span class="text-sm text-slate-600">{{ article.unite }}</span>
         <div class="text-sm">
-          <p class="font-black text-slate-900">{{ article.typeTarif === "volume" ? "Au volume" : "Prix fixe" }}</p>
-          <p class="text-slate-500">{{ Number(article.typeTarif === "volume" ? article.prixParM3 : article.prixUnitaire || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) }}{{ article.typeTarif === "volume" ? " / m³" : "" }}</p>
+          <p class="font-black text-slate-900">{{ article.typeTarif === "volume" ? "Au volume" : article.typeTarif === "libre" ? "Prix à définir" : "Prix fixe" }}</p>
+          <p v-if="article.typeTarif !== 'libre'" class="text-slate-500">{{ Number(article.typeTarif === "volume" ? article.prixParM3 : article.prixUnitaire || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) }}{{ article.typeTarif === "volume" ? " / m³" : "" }}</p>
+          <p v-else class="text-slate-400">À renseigner plus tard</p>
         </div>
         <button class="w-fit rounded-full px-3 py-1 text-xs font-black" :class="article.actif !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" @click="toggleArticle(article)">
           {{ article.actif !== false ? "OUI" : "NON" }}
@@ -220,10 +288,10 @@ onMounted(fetchArticles)
         <form class="mt-6 grid gap-4 sm:grid-cols-2" @submit.prevent="saveArticle">
           <label class="sm:col-span-2"><span class="mb-2 block text-sm font-bold">Nom</span><input v-model="form.nom" required class="input input-bordered w-full rounded-lg" placeholder="Ex. Télévision" /></label>
           <label><span class="mb-2 block text-sm font-bold">Catégorie</span><input v-model="form.categorie" class="input input-bordered w-full rounded-lg" placeholder="Général" /></label>
-          <label><span class="mb-2 block text-sm font-bold">Unité</span><select v-model="form.unite" class="select select-bordered w-full rounded-lg"><option>Pièce</option><option>Carton</option><option>Kg</option><option>Lot</option><option>Pouce</option></select></label>
-          <label><span class="mb-2 block text-sm font-bold">Type de tarif</span><select v-model="form.typeTarif" class="select select-bordered w-full rounded-lg"><option value="fixe">Prix fixe par unité</option><option value="volume">Prix au m³</option></select></label>
+          <label><span class="mb-2 block text-sm font-bold">Unité</span><select v-model="form.unite" class="select select-bordered w-full rounded-lg"><option>Pièce</option><option>Carton</option><option>Kg</option><option>Lot</option><option>Pouce</option><option>m³</option></select></label>
+          <label><span class="mb-2 block text-sm font-bold">Type de tarif</span><select v-model="form.typeTarif" class="select select-bordered w-full rounded-lg"><option value="libre">Prix à définir plus tard</option><option value="fixe">Prix fixe par unité</option><option value="volume">Prix au m³</option></select></label>
           <label v-if="form.typeTarif === 'fixe'"><span class="mb-2 block text-sm font-bold">Prix unitaire (€)</span><input v-model.number="form.prixUnitaire" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-lg" /></label>
-          <label v-else><span class="mb-2 block text-sm font-bold">Prix par m³ (€)</span><input v-model.number="form.prixParM3" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-lg" /></label>
+          <label v-else-if="form.typeTarif === 'volume'"><span class="mb-2 block text-sm font-bold">Prix par m³ (€)</span><input v-model.number="form.prixParM3" type="number" min="0" step="0.01" class="input input-bordered w-full rounded-lg" /></label>
           <label><span class="mb-2 block text-sm font-bold">Ordre</span><input v-model.number="form.ordre" type="number" class="input input-bordered w-full rounded-lg" /></label>
           <label class="flex items-center gap-3 pt-8"><input v-model="form.actif" type="checkbox" class="toggle toggle-primary" /><span class="font-bold">Article actif</span></label>
           <button type="submit" :disabled="saving" class="btn btn-primary mt-2 rounded-lg sm:col-span-2">{{ saving ? "Enregistrement…" : "Enregistrer" }}</button>

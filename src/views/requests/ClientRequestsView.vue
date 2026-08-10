@@ -7,7 +7,6 @@ import { toast } from "vue3-toastify"
 import { Check, Search } from "lucide-vue-next"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
-import { syncPublicTracking } from "../../utils/publicTracking"
 import { confirmToast } from "../../utils/notifications"
 
 const db = useFirestore()
@@ -259,7 +258,6 @@ async function validateRequest(item) {
       })
     })
 
-    await syncPublicTracking(db, { ...data, id: enlevementRef.id }, store.entreprise, enlevementRef.id)
     selected.value = null
     await fetchRequests()
     toast("Demande validée et colis créé", { type: "success" })

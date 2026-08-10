@@ -11,7 +11,6 @@ import {
   where,
   serverTimestamp
 } from 'firebase/firestore'
-import { syncPublicTracking } from '../../utils/publicTracking.js'
 
 function generateNumero() {
   return `COL-${Date.now()}`
@@ -115,8 +114,6 @@ export const useEnlevementStore = defineStore('enlevements', {
           ...payload,
           createdAt: new Date()
         }
-
-        await syncPublicTracking(db, newEnlevement, {}, docRef.id)
 
         this.enlevements.push(newEnlevement)
 

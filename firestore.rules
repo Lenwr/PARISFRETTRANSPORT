@@ -157,10 +157,9 @@ service cloud.firestore {
     }
 
     match /publicTrackings/{docId} {
-      allow get: if true;
-      allow list: if false;
-      allow create: if isCreatingForSameEntreprise();
-      allow update, delete: if canReadOrWriteEntrepriseResource();
+      // Le suivi public est désormais publié par Cloud Functions vers l'API
+      // centrale. Aucun document (ancien ou nouveau) ne doit être exposé ici.
+      allow read, write: if false;
     }
 
     match /colis/{docId} {

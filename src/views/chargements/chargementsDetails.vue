@@ -262,7 +262,7 @@ onMounted(fetchData)
           <p class="text-xs font-bold uppercase text-primary">Voyage</p>
 
           <h1 class="text-2xl font-black text-slate-900 md:text-3xl">
-            {{ chargement?.contenaire || "Détail chargement" }}
+            {{ chargement?.numeroVol || chargement?.contenaire || "Détail chargement" }}
           </h1>
 
           <p class="text-sm text-slate-500">

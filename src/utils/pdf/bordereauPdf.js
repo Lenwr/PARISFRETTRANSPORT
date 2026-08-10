@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf"
 import { format } from "date-fns"
 import frLocale from "date-fns/locale/fr"
 import { formatMoney } from "../money"
+import { DEFAULT_SALES_TERMS } from "./defaultSalesTerms"
 
 const PAGE_WIDTH = 210
 const PAGE_HEIGHT = 297
@@ -227,6 +228,51 @@ function drawPaymentBox(pdf, colis, x, y) {
   pdf.text(money(colis.resteAPayer), x + 67, y + 18)
 }
 
+function drawSalesTerms(pdf, { entreprise, logoImage }) {
+  const salesTerms = String(
+    entreprise?.conditionsGeneralesVente || DEFAULT_SALES_TERMS
+  ).trim()
+
+  if (!salesTerms) return
+
+  pdf.addPage()
+  drawHeader(pdf, { entreprise, logoImage })
+
+  pdf.setFont("helvetica", "bold")
+  pdf.setFontSize(14)
+  setColor(pdf, INK)
+  pdf.text("Conditions générales de vente", MARGIN, 52)
+
+  pdf.setFont("helvetica", "normal")
+  pdf.setFontSize(8)
+  setColor(pdf, INK)
+
+  const lines = pdf.splitTextToSize(salesTerms, PAGE_WIDTH - (MARGIN * 2))
+  const lineHeight = 4
+  let y = 62
+
+  lines.forEach(line => {
+    if (y > 276) {
+      drawFooter(pdf)
+      pdf.addPage()
+      drawHeader(pdf, { entreprise, logoImage })
+      pdf.setFont("helvetica", "bold")
+      pdf.setFontSize(9)
+      setColor(pdf, MUTED)
+      pdf.text("Conditions générales de vente — suite", MARGIN, 50)
+      pdf.setFont("helvetica", "normal")
+      pdf.setFontSize(8)
+      setColor(pdf, INK)
+      y = 59
+    }
+
+    pdf.text(line, MARGIN, y)
+    y += lineHeight
+  })
+
+  drawFooter(pdf)
+}
+
 export async function generateBordereauPdf({ colis, entreprise }) {
   const pdf = new jsPDF({
     orientation: "p",
@@ -342,5 +388,6 @@ export async function generateBordereauPdf({ colis, entreprise }) {
   pdf.text("Client / destinataire", 146, y + 20)
 
   drawFooter(pdf)
+  drawSalesTerms(pdf, { entreprise, logoImage })
   pdf.save(`bordereau-${fileNamePart(colis.expediteur)}.pdf`)
 }
