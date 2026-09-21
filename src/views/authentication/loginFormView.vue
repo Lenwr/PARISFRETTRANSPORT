@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue"
 import { useRouter } from "vue-router"
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, Ship } from "lucide-vue-next"
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-vue-next"
 import { useAuthStore } from "../../stores/useAuthStore"
 
 const router = useRouter()
@@ -31,8 +31,8 @@ async function submit() {
       <div class="absolute inset-0 bg-gradient-to-br from-[#07110f]/92 via-[#10201d]/78 to-[#0f766e]/58" />
       <div class="relative z-10 flex h-full flex-col justify-between px-12 py-12 xl:px-16">
         <div class="flex items-center gap-3 text-white">
-          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary shadow-xl">
-            <Ship class="h-6 w-6" />
+          <div class="flex h-20 w-20 items-center justify-center rounded-2xl bg-white text-primary shadow-xl">
+            <img src="/images/paris-fret-logo-2026.jpg" alt="Paris Fret et Services" class="h-full w-full rounded-lg bg-white object-contain" />
           </div>
           <div>
             <p class="text-xl font-black">Paris Fret Transport</p>
@@ -57,8 +57,8 @@ async function submit() {
     <main class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8 lg:px-14">
       <div class="w-full max-w-md">
         <div class="mb-10 flex items-center gap-3 lg:hidden">
-          <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">
-            <Ship class="h-6 w-6" />
+          <div class="flex h-20 w-20 items-center justify-center rounded-lg bg-primary text-white">
+            <img src="/images/paris-fret-logo-2026.jpg" alt="Paris Fret et Services" class="h-full w-full rounded-lg bg-white object-contain" />
           </div>
           <div>
             <p class="text-xl font-black">Paris Fret Transport</p>

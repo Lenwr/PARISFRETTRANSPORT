@@ -1,4 +1,5 @@
 <script setup>
+import { resolveCompanyLogo } from "../branding"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { collection, onSnapshot, query, where } from "firebase/firestore"
@@ -16,7 +17,6 @@ import {
   Calculator,
   FileText,
   MessageCircle,
-  Ship,
   BookOpen,
   Bell,
   ScanLine
@@ -37,7 +37,7 @@ let unsubscribeRequests
 const entreprise = computed(() => store.entreprise)
 
 const logoUrl = computed(() => {
-  return entreprise.value?.logoUrl || "/images/logo.png"
+  return resolveCompanyLogo(entreprise.value)
 })
 
 const entrepriseNom = computed(() => {
@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
     <aside class="fixed left-0 top-0 z-40 hidden h-screen w-80 flex-col border-r border-white/10 bg-[var(--pf-sidebar)] text-white lg:flex">
       <div class="flex h-24 items-center gap-4 px-7">
         <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-white/15">
-          <img :src="logoUrl" class="h-full w-full object-cover" alt="" />
+          <img :src="logoUrl" class="h-full w-full object-contain" alt="Paris Fret et Services" />
         </div>
         <div class="min-w-0">
           <p class="truncate text-[15px] font-black tracking-[-0.02em]">{{ entrepriseNom }}</p>
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
         <div class="flex h-24 items-center justify-between gap-3 px-6">
           <div class="flex min-w-0 items-center gap-3">
             <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white">
-              <img :src="logoUrl" class="h-full w-full object-cover" alt="" />
+              <img :src="logoUrl" class="h-full w-full object-contain" alt="Paris Fret et Services" />
             </div>
             <div class="min-w-0">
               <p class="truncate text-base font-black">{{ entrepriseNom }}</p>
@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
       <div class="flex h-full items-center justify-between gap-4 px-5 lg:px-10">
         <div class="flex min-w-0 items-center gap-3">
           <div class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 lg:hidden">
-            <Ship class="h-5 w-5 text-white" />
+            <img :src="logoUrl" class="h-full w-full bg-white object-contain" alt="Paris Fret et Services" />
           </div>
           <div class="min-w-0">
             <p class="truncate text-sm font-black text-slate-950 lg:text-[15px]">

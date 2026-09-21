@@ -5,7 +5,7 @@ import { CheckCircle2 } from "lucide-vue-next"
 <template>
   <main class="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 text-slate-950">
     <section class="w-full max-w-xl rounded-3xl border border-emerald-200 bg-white p-8 text-center shadow-sm sm:p-12">
-      <img src="/images/logo.png" alt="Paris Fret Transport" class="mx-auto h-20 w-20 rounded-2xl object-contain" />
+      <img src="/images/paris-fret-logo-2026.jpg" alt="Paris Fret Transport" class="mx-auto h-20 w-20 rounded-2xl object-contain" />
       <div class="mx-auto mt-7 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
         <CheckCircle2 class="h-9 w-9" />
       </div>

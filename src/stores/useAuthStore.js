@@ -33,7 +33,7 @@ const PARIS_FRET_ENTREPRISE = {
     city: "Le Thillay",
     country: "France"
   },
-  logoUrl: "/images/logo.png",
+  logoUrl: "/images/paris-fret-logo-2026.jpg",
   isActive: true,
   features: {
     envois: true,

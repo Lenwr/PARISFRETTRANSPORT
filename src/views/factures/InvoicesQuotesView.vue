@@ -1,4 +1,5 @@
 <script setup>
+import { resolveCompanyLogo } from "../../branding"
 import { computed, reactive } from "vue"
 import jsPDF from "jspdf"
 import { Download, FileText, Plus, Receipt, Trash2 } from "lucide-vue-next"
@@ -42,7 +43,7 @@ const company = computed(() => {
     email: data.email || "",
     phone: data.tel || "",
     registration: data.companyRegistrationNumber || data.siret || "",
-    logoUrl: data.logoUrl || data.logoURL || data.logo || data.imageUrl || "/images/logo.png",
+    logoUrl: resolveCompanyLogo(data),
     address: [
       address.number || data.numeroRue,
       address.street || data.rue,

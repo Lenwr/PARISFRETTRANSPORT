@@ -1,4 +1,5 @@
 <script setup>
+import { resolveCompanyLogo } from "../branding"
 import { computed, reactive, ref } from "vue"
 import { addDoc, collection, serverTimestamp } from "firebase/firestore"
 import jsPDF from "jspdf"
@@ -42,7 +43,7 @@ const company = computed(() => {
     name: data.nom || data.companyName || "Paris Fret Transport",
     email: data.email || "",
     phone: data.tel || "",
-    logoUrl: data.logoUrl || data.logoURL || data.logo || data.imageUrl || "/images/logo.png",
+    logoUrl: resolveCompanyLogo(data),
     address: data.adresse || structuredAddress
   }
 })

@@ -1,3 +1,4 @@
+import { resolveCompanyLogo } from "../../branding"
 import { jsPDF } from "jspdf"
 import { formatMoney, parseMoney } from "../money"
 
@@ -145,12 +146,7 @@ function invoiceLines(colis) {
 
 export async function generateColisInvoicePdf({ colis, entreprise }) {
   const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true })
-  const logoUrl =
-    entreprise?.logoUrl ||
-    entreprise?.logoURL ||
-    entreprise?.logo ||
-    entreprise?.imageUrl ||
-    "/images/logo.png"
+  const logoUrl = resolveCompanyLogo(entreprise)
   const logo = await imageUrlToBase64(logoUrl)
   const qrCanvas = document.querySelector("#mainQr canvas")
   const qrImage = qrCanvas?.toDataURL("image/png")
@@ -164,7 +160,7 @@ export async function generateColisInvoicePdf({ colis, entreprise }) {
   pdf.rect(0, 0, 210, 297, "F")
 
   if (logo) {
-    pdf.addImage(logo, imageFormat(logo), 15, 14, 25, 18)
+    pdf.addImage(logo, imageFormat(logo), 15, 14, 18, 18)
   }
 
   pdf.setFont("helvetica", "bold")

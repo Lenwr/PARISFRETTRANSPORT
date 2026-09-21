@@ -1,4 +1,5 @@
 <script setup>
+import { resolveCompanyLogo, PARIS_FRET_LOGO_VERSION, PARIS_FRET_LOGO_URL } from "../branding"
 import { ref, onMounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { toast } from "vue3-toastify"
@@ -59,11 +60,11 @@ const entrepriseForm = ref({
   subscriptionStatus: "active",
   plan: "free",
 
-  logoUrl: "",
+  logoUrl: PARIS_FRET_LOGO_URL,
   conditionsGeneralesVente: DEFAULT_SALES_TERMS
 })
 
-const logoPreview = ref(null)
+const logoPreview = ref(PARIS_FRET_LOGO_URL)
 const selectedLogoFile = ref(null)
 const uploading = ref(false)
 const loading = ref(false)
@@ -110,6 +111,7 @@ async function fetchEntrepriseData() {
     entrepriseForm.value = {
       ...entrepriseForm.value,
       ...data,
+      logoUrl: resolveCompanyLogo(data),
       nomResponsable: data.nomResponsable || data.lastName || "",
       prenom: data.prenom || data.firstName || "",
       raisonSociale: data.raisonSociale || data.nom || "",
@@ -197,6 +199,7 @@ async function updateEntreprise() {
       conditionsGeneralesVente: entrepriseForm.value.conditionsGeneralesVente.trim(),
 
       logoUrl: logoURL,
+      logoBrandVersion: PARIS_FRET_LOGO_VERSION,
       updatedAt: serverTimestamp()
     }
 

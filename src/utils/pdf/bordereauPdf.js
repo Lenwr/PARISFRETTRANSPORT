@@ -1,3 +1,4 @@
+import { resolveCompanyLogo } from "../../branding"
 import { jsPDF } from "jspdf"
 import { format } from "date-fns"
 import frLocale from "date-fns/locale/fr"
@@ -282,16 +283,10 @@ export async function generateBordereauPdf({ colis, entreprise }) {
   })
   const qrCanvas = document.querySelector("#mainQr canvas")
   const qrImage = qrCanvas?.toDataURL("image/png")
-  const logoUrl =
-    entreprise?.logoUrl ||
-    entreprise?.logoURL ||
-    entreprise?.logo ||
-    entreprise?.imageUrl ||
-    ""
+  const logoUrl = resolveCompanyLogo(entreprise)
   const logoImage = await imageUrlToBase64(logoUrl)
   const isAir = colis.typeDeFret === "Aérien"
 
-  // Seul le logo réellement choisi dans Paramètres est affiché.
   drawHeader(pdf, { entreprise, logoImage })
 
   pdf.setFont("helvetica", "bold")

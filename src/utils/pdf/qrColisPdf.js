@@ -1,3 +1,4 @@
+import { resolveCompanyLogo } from "../../branding"
 import { jsPDF } from "jspdf"
 
 function clean(value) {
@@ -85,16 +86,11 @@ export async function generateQrColisPdf(colis, { entreprise } = {}) {
     format: [80, 120],
     compress: true
   })
-  const logoUrl =
-    entreprise?.logoUrl ||
-    entreprise?.logoURL ||
-    entreprise?.logo ||
-    entreprise?.imageUrl ||
-    "/images/logo.png"
+  const logoUrl = resolveCompanyLogo(entreprise)
   let logoImage = await imageUrlToBase64(logoUrl)
 
-  if (!logoImage && logoUrl !== "/images/logo.png") {
-    logoImage = await imageUrlToBase64("/images/logo.png")
+  if (!logoImage && logoUrl !== "/images/paris-fret-logo-2026.jpg") {
+    logoImage = await imageUrlToBase64("/images/paris-fret-logo-2026.jpg")
   }
 
   let first = true

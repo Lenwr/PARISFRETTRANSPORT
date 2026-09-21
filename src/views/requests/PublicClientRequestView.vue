@@ -1,4 +1,5 @@
 <script setup>
+import { resolveCompanyLogo } from "../../branding"
 import { computed, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { Plus, Send, Trash2 } from "lucide-vue-next"
@@ -9,7 +10,7 @@ const router = useRouter()
 const loading = ref(true)
 const sending = ref(false)
 const error = ref("")
-const company = ref({ name: "Paris Fret Transport", logoUrl: "/images/logo.png" })
+const company = ref({ name: "Paris Fret Transport", logoUrl: "/images/paris-fret-logo-2026.jpg" })
 const catalogue = ref([])
 const endpoint = "https://us-central1-" + firebaseApp.options.projectId + ".cloudfunctions.net/clientRequestForm"
 const requestToken = computed(() => {
@@ -131,7 +132,7 @@ onMounted(async () => {
     if (data.invite.submitted) return router.replace({ name: "request-thank-you" })
     company.value = {
       name: data.entreprise?.name || "Paris Fret Transport",
-      logoUrl: data.entreprise?.logoUrl || "/images/logo.png"
+      logoUrl: resolveCompanyLogo(data.entreprise)
     }
     catalogue.value = Array.isArray(data.catalogue) ? data.catalogue : []
     form.value.expediteur = data.invite.name || ""
