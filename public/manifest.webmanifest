@@ -1,0 +1,19 @@
+{
+  "name": "Paris Fret et Services",
+  "short_name": "Paris Fret",
+  "description": "Gestion des clients, colis, conteneurs et livraisons.",
+  "start_url": "/#/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "lang": "fr-FR",
+  "icons": [
+    {
+      "src": "/images/paris-fret-logo-2026.jpg",
+      "sizes": "1254x1254",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
