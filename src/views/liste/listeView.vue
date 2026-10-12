@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import frLocale from 'date-fns/locale/fr'
 import { collection, query, where } from 'firebase/firestore'
 import { useCollection, useFirestore } from 'vuefire'
+import { List, LayoutGrid } from 'lucide-vue-next'
 
 import ListCard from '../../components/listCard.vue'
 
@@ -29,6 +30,7 @@ const DELIVERY_TABS = [
 const selectedTab = ref('Tous')
 const selectedStatut = ref('')
 const search = ref('')
+const viewMode = ref('grid')
 
 const { entrepriseId, isLoading } = useEntrepriseId()
 const db = useFirestore()
@@ -118,6 +120,10 @@ function getTabClass(tab) {
         <p class="mt-5 max-w-2xl text-base leading-7 text-slate-500">
           Suivi des colis et statuts logistiques
         </p>
+        <div class="mt-5 flex gap-2">
+          <button class="btn rounded-xl" :class="viewMode === 'grid' ? 'bg-primary text-white' : 'bg-white'" @click="viewMode = 'grid'"><LayoutGrid class="h-4 w-4" /> Vue grille</button>
+          <button class="btn rounded-xl" :class="viewMode === 'list' ? 'bg-primary text-white' : 'bg-white'" @click="viewMode = 'list'"><List class="h-4 w-4" /> Vue liste</button>
+        </div>
       </div>
 
     <!-- FILTERS -->
@@ -206,10 +212,7 @@ function getTabClass(tab) {
       </div>
 
       <!-- LIST -->
-      <div
-        v-else
-        class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3"
-      >
+      <div v-else-if="viewMode === 'grid'" class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
 
         <router-link
           v-for="liste in filteredList"
@@ -229,6 +232,23 @@ function getTabClass(tab) {
           />
         </router-link>
 
+      </div>
+
+      <div v-else class="overflow-x-auto rounded-[28px] border border-slate-950/[0.07] bg-white shadow-sm">
+        <table class="table w-full">
+          <thead><tr><th>Référence</th><th>Expéditeur</th><th>Destinataire</th><th>Destination</th><th>Colis</th><th>Livraison</th><th>Paiement</th></tr></thead>
+          <tbody>
+            <tr v-for="liste in filteredList" :key="liste.id" class="hover:bg-slate-50">
+              <td><router-link :to="`/liste/${liste.id}`" class="font-black text-primary">{{ liste.numero || liste.id }}</router-link></td>
+              <td>{{ liste.expediteur || '-' }}</td>
+              <td>{{ liste.destinataire || '-' }}</td>
+              <td>{{ liste.destination || '-' }}</td>
+              <td>{{ liste.nombreDeColis || 0 }}</td>
+              <td><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">{{ liste.deliveryStatus || 'En attente' }}</span></td>
+              <td>{{ liste.statut || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
     </div>

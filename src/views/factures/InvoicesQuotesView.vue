@@ -1,12 +1,56 @@
 <script setup>
 import { resolveCompanyLogo } from "../../branding"
-import { computed, reactive } from "vue"
+import { computed, reactive, ref, onMounted } from "vue"
+import { useRoute } from "vue-router"
+import { collection, addDoc, getDocs, query, where } from "firebase/firestore"
+import { useFirestore } from "vuefire"
 import jsPDF from "jspdf"
 import { Download, FileText, Plus, Receipt, Trash2 } from "lucide-vue-next"
 import { toast } from "vue3-toastify"
 import { useAuthStore } from "../../stores/useAuthStore"
 
 const authStore = useAuthStore()
+const route = useRoute()
+const db = useFirestore()
+const savedDocuments = ref([])
+const loadingDocuments = ref(false)
+const invoiceSearch = ref("")
+const entrepriseId = computed(() => authStore.entreprise?.id || authStore.userProfile?.entrepriseId)
+const clientFilter = computed(() => String(route.query.client || '').trim().toLowerCase())
+const visibleDocuments = computed(() => savedDocuments.value.filter(item => {
+  const matchesClient = !clientFilter.value || String(item.clientName || '').trim().toLowerCase() === clientFilter.value
+  const search = invoiceSearch.value.trim().toLowerCase()
+  const matchesSearch = !search || [item.number, item.clientName, item.date, item.paymentStatus, item.type].some(value => String(value || '').toLowerCase().includes(search))
+  return matchesClient && matchesSearch
+}))
+
+async function loadDocuments() {
+  if (!entrepriseId.value) return
+  loadingDocuments.value = true
+  try {
+    const snapshot = await getDocs(query(collection(db, "factures"), where("entrepriseId", "==", entrepriseId.value)))
+    const invoices = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
+    const shipments = await getDocs(query(collection(db, "enlevements"), where("entrepriseId", "==", entrepriseId.value)))
+    const generatedNumbers = new Set(invoices.map(item => item.number))
+    shipments.docs.forEach(item => {
+      const data = item.data()
+      const number = data.numero || `FAC-${item.id.slice(0, 8).toUpperCase()}`
+      if (generatedNumbers.has(number)) return
+      invoices.push({
+        id: `shipment-${item.id}`,
+        type: "facture",
+        number,
+        date: String(data.date || data.createdAt || "").slice(0, 10),
+        clientName: data.expediteur || data.destinataire || "Client colis",
+        customerId: data.customerId || "",
+        totalTtc: Number(data.prix || 0),
+        paymentStatus: data.statut || "À payer",
+        legacyShipment: true
+      })
+    })
+    savedDocuments.value = invoices.sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")))
+  } finally { loadingDocuments.value = false }
+}
 
 const documentForm = reactive({
   type: "facture",
@@ -300,12 +344,41 @@ async function generateDocumentPdf() {
   drawText(doc, `Document généré par ${company.value.name}.`, 14, 286)
 
   doc.save(fileName)
+  const saved = {
+    type: documentForm.type,
+    number: documentForm.number,
+    date: documentForm.date,
+    dueDate: documentForm.dueDate,
+    clientName: documentForm.clientName,
+    totalTtc: Number(totalTtc.value.toFixed(2)),
+    paymentStatus: documentForm.paymentStatus,
+    entrepriseId: entrepriseId.value,
+    createdAt: new Date().toISOString()
+  }
+  const savedRef = await addDoc(collection(db, "factures"), saved)
+  savedDocuments.value.unshift({ id: savedRef.id, ...saved })
   toast(`${title.toLowerCase()} généré`, { type: "success", autoClose: 1200 })
 }
+
+onMounted(loadDocuments)
 </script>
 
 <template>
   <section class="space-y-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex items-center justify-between gap-3">
+        <div><p class="text-sm font-bold text-primary">Historique</p><h2 class="text-xl font-black text-slate-950">Liste des factures et devis</h2></div>
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">{{ visibleDocuments.length }}</span>
+      </div>
+      <input v-model="invoiceSearch" class="input input-bordered mt-4 w-full rounded-xl" placeholder="Rechercher par numéro, client, date ou statut..." />
+      <div v-if="loadingDocuments" class="py-6 text-center text-sm text-slate-500">Chargement...</div>
+      <div v-else-if="!visibleDocuments.length" class="py-6 text-sm text-slate-500">Aucune facture enregistrée pour ce client.</div>
+      <div v-else class="mt-4 overflow-x-auto">
+        <table class="table w-full"><thead><tr><th>Type</th><th>Numéro</th><th>Client</th><th>Date</th><th>Total TTC</th><th>Statut</th></tr></thead>
+          <tbody><tr v-for="item in visibleDocuments" :key="item.id"><td class="font-bold">{{ item.type === 'devis' ? 'Devis' : 'Facture' }}</td><td>{{ item.number }}</td><td>{{ item.clientName }}</td><td>{{ item.date || '-' }}</td><td>{{ currency(item.totalTtc) }}</td><td>{{ item.paymentStatus || '-' }}</td></tr></tbody>
+        </table>
+      </div>
+    </div>
     <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <p class="text-sm font-bold text-primary">Factures</p>
       <div class="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

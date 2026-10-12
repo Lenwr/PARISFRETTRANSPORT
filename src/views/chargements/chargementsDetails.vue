@@ -8,7 +8,7 @@ import { useAuthStore } from "../../stores/useAuthStore"
 import { firebaseApp } from "../../components/firebaseConfig"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 import { jsPDF } from "jspdf"
-import { Download, Trash2 } from "lucide-vue-next"
+import { Download, Trash2, Plus, List, LayoutGrid } from "lucide-vue-next"
 import { confirmToast } from "../../utils/notifications"
 import { runTransaction } from "firebase/firestore"
 
@@ -30,6 +30,7 @@ const loading = ref(true)
 const sendingSMS = ref(false)
 const removing = ref(false)
 const packageSearch = ref("")
+const displayMode = ref("cards")
 const filteredPackages = computed(() => {
   const search = packageSearch.value.trim().toLocaleLowerCase("fr")
   return colisDuVoyage.value.filter(item => [item.nom, item.numero, item.expediteur, item.destinataire].some(value => String(value).toLocaleLowerCase("fr").includes(search)))
@@ -60,6 +61,7 @@ async function removePackage(item) {
     removing.value = false
   }
 }
+
 
 function exportPackingList() {
   const pdf = new jsPDF()
@@ -447,9 +449,10 @@ onMounted(fetchData)
 
           <div class="mb-4 flex flex-wrap gap-3">
             <input v-model="packageSearch" aria-label="Rechercher un colis" placeholder="Rechercher un colis" class="input input-bordered min-w-0 flex-1" />
+            <button class="btn btn-outline" @click="displayMode = displayMode === 'cards' ? 'table' : 'cards'"><LayoutGrid v-if="displayMode === 'table'" class="h-4 w-4" /><List v-else class="h-4 w-4" />{{ displayMode === 'cards' ? 'Vue tableau' : 'Vue cartes' }}</button>
             <button class="btn btn-primary" :disabled="!colisDuVoyage.length" @click="exportPackingList"><Download class="h-4 w-4" />Liste PDF</button>
           </div>
-          <div class="hidden overflow-x-auto md:block">
+          <div v-if="displayMode === 'table'" class="overflow-x-auto">
             <table class="table">
               <thead>
                 <tr>
@@ -467,7 +470,7 @@ onMounted(fetchData)
               <tbody>
                 <tr
                   v-for="item in filteredPackages"
-                  :key="`${item.enlevementId}-${item.colisIndex}-${item.detailIndex}`"
+                  :key="item.manual ? `manual-${item.manualIndex}` : `${item.enlevementId}-${item.colisIndex}-${item.detailIndex}`"
                 >
                   <td class="font-bold">{{ item.nom }}</td>
                   <td>{{ item.expediteur }}</td>
@@ -486,10 +489,10 @@ onMounted(fetchData)
             </table>
           </div>
 
-          <div class="space-y-3 md:hidden">
+          <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div
               v-for="item in filteredPackages"
-              :key="`${item.enlevementId}-${item.colisIndex}-${item.detailIndex}`"
+              :key="item.manual ? `manual-${item.manualIndex}` : `${item.enlevementId}-${item.colisIndex}-${item.detailIndex}`"
               class="rounded-2xl border border-slate-100 bg-slate-50 p-4"
             >
               <div class="mb-2 flex items-start justify-between gap-3">

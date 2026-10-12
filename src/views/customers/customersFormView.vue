@@ -6,7 +6,8 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  where
+  where,
+  runTransaction
 } from 'firebase/firestore'
 import { computed, ref } from 'vue'
 import { useCollection, useFirestore } from 'vuefire'
@@ -36,6 +37,8 @@ const customer = ref({
   nom: '',
   prenom: '',
   telephone: '',
+  adresse: '',
+  destination: '',
   smsConsent: true,
   envois: [{ expediteur: '', colis: '' }],
 })
@@ -47,6 +50,8 @@ const resetForm = () => {
     nom: '',
     prenom: '',
     telephone: '',
+    adresse: '',
+    destination: '',
     smsConsent: true,
     envois: [{ expediteur: '', colis: '' }],
   })
@@ -91,8 +96,8 @@ const addCustomer = async () => {
     return
   }
 
-  const { nom, prenom, telephone } = customer.value
-  if (!nom || !prenom || !telephone) {
+  const { nom, prenom, telephone, adresse, destination } = customer.value
+  if (!nom || !prenom || !telephone || !adresse || !destination) {
     toast("Veuillez remplir les champs requis ⚠️", { type: 'warning' })
     loading.value = false
     return
@@ -111,15 +116,25 @@ const addCustomer = async () => {
   }
 
   try {
-    await addDoc(collection(db, 'customers'), {
-      ...customer.value,
-      entrepriseId: currentEntrepriseId,
-      createdAt: new Date(),
+    const normalizedCity = String(destination).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+    const cityCodes = { YAOUNDE: 'YDE', YAOUNDÉ: 'YDE', DOUALA: 'DLA' }
+    const cityCode = cityCodes[normalizedCity] || normalizedCity.replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X')
+    const counterRef = doc(db, 'entreprises', currentEntrepriseId)
+    const customerRef = doc(collection(db, 'customers'))
+    let referenceClient = ''
+    await runTransaction(db, async transaction => {
+      const counterSnap = await transaction.get(counterRef)
+      const counters = counterSnap.data()?.customerCounters || {}
+      const nextNumber = Number(counters[cityCode] || 0) + 1
+      referenceClient = `${String(nextNumber).padStart(4, '0')}${cityCode}`
+      transaction.update(counterRef, { [`customerCounters.${cityCode}`]: nextNumber, updatedAt: serverTimestamp() })
+      transaction.set(customerRef, { ...customer.value, referenceClient, entrepriseId: currentEntrepriseId, createdAt: new Date() })
     })
-    toast("Client enregistré ✅", { type: 'success', autoClose: 1000 })
+    toast(`Client enregistré ✅ Référence : ${referenceClient}`, { type: 'success', autoClose: 3500 })
     resetForm()
   } catch (e) {
-    toast("Erreur lors de l'enregistrement ❌", { type: 'error' })
+    console.error("Erreur enregistrement client:", e)
+    toast(e.code === "permission-denied" ? "Autorisation Firestore manquante : déployer les règles." : `Erreur lors de l'enregistrement : ${e.message || "réessayez"}`, { type: 'error', autoClose: 3000 })
   } finally {
     loading.value = false
   }
@@ -178,6 +193,20 @@ const selectItem = (item) => {
         <div>
           <label for="telephone" class="block text-sm font-medium text-gray-900">Téléphone</label>
           <input id="telephone" v-model="customer.telephone" type="tel" class="input-style" placeholder="+33 6 12 34 56 78" />
+        </div>
+
+        <div>
+          <label for="adresse" class="block text-sm font-medium text-gray-900">Adresse</label>
+          <input id="adresse" v-model="customer.adresse" class="input-style" placeholder="Adresse du client" />
+        </div>
+
+        <div>
+          <label for="destination" class="block text-sm font-medium text-gray-900">Destination</label>
+          <select id="destination" v-model="customer.destination" class="input-style bg-white">
+            <option value="" disabled>Choisir une destination</option>
+            <option value="YAOUNDE">YAOUNDE</option>
+            <option value="DOUALA">DOUALA</option>
+          </select>
         </div>
 
         <label class="flex items-start gap-3 text-sm text-gray-700">

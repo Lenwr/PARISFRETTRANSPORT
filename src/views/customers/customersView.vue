@@ -8,9 +8,14 @@ import { toast } from 'vue3-toastify'
 import { MessageCircle } from 'lucide-vue-next'
 import { PARIS_FRET_ENTREPRISE_ID } from '../../appConfig.js'
 import { confirmToast } from '../../utils/notifications'
+import { collection, getDocs, query as firestoreQuery, where, doc, runTransaction, serverTimestamp } from 'firebase/firestore'
+import { useFirestore } from 'vuefire'
 
 const query = ref('')
 const sortAsc = ref(true)
+const selectedCustomers = ref([])
+const invoiceCounts = ref({})
+const db = useFirestore()
 
 const authStore = useAuthStore()
 const entrepriseId = computed(() =>
@@ -33,10 +38,54 @@ const customer = ref({
 onMounted(async () => {
   if (entrepriseId.value) {
     await customersStore.fetchCustomers(entrepriseId.value)
+    const shipments = await getDocs(firestoreQuery(collection(db, 'enlevements'), where('entrepriseId', '==', entrepriseId.value)))
+    const destinationByCustomer = {}
+    shipments.docs.forEach(item => {
+      const data = item.data()
+      if (data.customerId && data.destination) destinationByCustomer[data.customerId] = data.destination
+    })
+    customers.value.forEach(item => {
+      if (!item.destination && destinationByCustomer[item.id]) item.destination = destinationByCustomer[item.id]
+    })
+    await generateMissingReferences()
+    const snapshot = await getDocs(firestoreQuery(collection(db, 'factures'), where('entrepriseId', '==', entrepriseId.value)))
+    invoiceCounts.value = snapshot.docs.reduce((counts, item) => {
+      const data = item.data()
+      const name = String(data.clientName || '').trim().toLowerCase()
+      if (name) counts[`name:${name}`] = (counts[`name:${name}`] || 0) + 1
+      if (data.customerId) counts[`id:${data.customerId}`] = (counts[`id:${data.customerId}`] || 0) + 1
+      return counts
+    }, {})
   } else {
     console.warn("ID entreprise manquant ❗")
   }
 })
+
+async function generateMissingReferences() {
+  const missing = customers.value.filter(item => !item.referenceClient && (item.destination || item.ville))
+  for (const customer of missing) {
+    const normalized = String(customer.destination || customer.ville).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    const cityCode = normalized === 'YAOUNDE' ? 'YDE' : normalized === 'DOUALA' ? 'DLA' : normalized.replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X')
+    const customerRef = doc(db, 'customers', customer.id)
+    const entrepriseRef = doc(db, 'entreprises', entrepriseId.value)
+    let referenceClient = ''
+    await runTransaction(db, async transaction => {
+      const entrepriseSnap = await transaction.get(entrepriseRef)
+      const counters = entrepriseSnap.data()?.customerCounters || {}
+      const nextNumber = Number(counters[cityCode] || 0) + 1
+      referenceClient = `${String(nextNumber).padStart(4, '0')}${cityCode}`
+      transaction.update(entrepriseRef, { [`customerCounters.${cityCode}`]: nextNumber, updatedAt: serverTimestamp() })
+      transaction.update(customerRef, { referenceClient })
+    })
+    customer.referenceClient = referenceClient
+  }
+}
+
+const invoiceCount = customer => {
+  const fullName = String(`${customer.nom || ''} ${customer.prenom || ''}`).trim().toLowerCase()
+  const reverseName = String(`${customer.prenom || ''} ${customer.nom || ''}`).trim().toLowerCase()
+  return invoiceCounts.value[`id:${customer.id}`] || invoiceCounts.value[`name:${fullName}`] || invoiceCounts.value[`name:${reverseName}`] || 0
+}
 
 // filtre + tri
 const filteredList = computed(() => {
@@ -45,10 +94,14 @@ const filteredList = computed(() => {
     return sortAsc.value ? res : -res
   })
   if (!query.value) return list
-  return list.filter(c =>
-    c.nom.toLowerCase().includes(query.value.toLowerCase())
-  )
+  return list.filter(c => `${c.referenceClient || ''} ${c.nom || ''} ${c.prenom || ''} ${c.ville || ''}`.toLowerCase().includes(query.value.toLowerCase()))
 })
+
+const toggleCustomer = id => {
+  selectedCustomers.value = selectedCustomers.value.includes(id)
+    ? selectedCustomers.value.filter(item => item !== id)
+    : [...selectedCustomers.value, id]
+}
 
 // ➕ Créer un client
 const createCustomers = async () => {
@@ -124,7 +177,7 @@ const deleteCustomers = async (id) => {
             d="M3 20h18M3 12h12m-6-8h6" />
         </svg>
       </span>
-      <input v-model="query" type="text" placeholder="nom du client"
+      <input v-model="query" type="text" placeholder="référence, nom ou ville"
         class="input input-bordered input-primary w-full max-w-xs bg-white" />
       <router-link
         to="/customers/broadcast"
@@ -162,22 +215,28 @@ const deleteCustomers = async (id) => {
             <table class="min-w-full">
               <thead class="bg-primary border-b">
                 <tr>
+                  <th class="text-xs font-medium text-white px-6 py-4 text-left">Sélection</th>
+                  <th class="text-xs font-medium text-white px-6 py-4 text-left">Référence</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left">Nom</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left">Prénom</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left">Adresse</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left">Code Postal</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left">Téléphone</th>
+                  <th class="text-xs font-medium text-white px-6 py-4 text-left">Factures</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left">Voir</th>
                   <th class="text-xs font-medium text-white px-6 py-4 text-left"></th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(item, i) in filteredList" :key="i" class="bg-gray-100 border-b">
+                  <td class="px-6 py-4"><input type="checkbox" class="checkbox checkbox-primary checkbox-sm" :checked="selectedCustomers.includes(item.id)" @change="toggleCustomer(item.id)" /></td>
+                  <td class="text-xs font-black text-primary px-6 py-4">{{ item.referenceClient || '-' }}</td>
                   <td class="text-xs text-gray-900 font-light px-6 py-4">{{ item.nom }}</td>
                   <td class="text-xs text-gray-900 font-light px-6 py-4">{{ item.prenom }}</td>
                   <td class="text-xs text-gray-900 font-light px-6 py-4">{{ item.adresse }}</td>
                   <td class="text-xs text-gray-900 font-light px-6 py-4">{{ item.codePostal }}</td>
                   <td class="text-xs text-gray-900 font-light px-6 py-4">{{ item.telephone }}</td>
+                  <td class="px-6 py-4"><router-link :to="`/factures?client=${encodeURIComponent(`${item.nom || ''} ${item.prenom || ''}`.trim())}`" class="font-black text-primary hover:underline">{{ invoiceCount(item) }}</router-link></td>
                   <td class="text-xs text-gray-900 font-light px-6 py-4">
                     <router-link :to="'/customersDetails/' + item.id">
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24"

@@ -2,7 +2,7 @@
 import { computed, ref, watch, nextTick } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDocument, useFirestore } from "vuefire"
-import { doc, getDoc, runTransaction, serverTimestamp, updateDoc, deleteDoc } from "firebase/firestore"
+import { doc, getDoc, runTransaction, serverTimestamp, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { toast } from "vue3-toastify"
 import "vue3-toastify/dist/index.css"
 
@@ -375,6 +375,32 @@ async function generateInvoicePDF() {
       }
     })
     toast("Facture générée", { type: "success", autoClose: 1200 })
+    try {
+      const existing = await getDocs(query(
+        collection(db, "factures"),
+        where("entrepriseId", "==", entrepriseId.value),
+        where("number", "==", colis.value.numero)
+      ))
+      if (existing.empty) {
+        await addDoc(collection(db, "factures"), {
+          type: "facture",
+          number: colis.value.numero,
+          date: String(colis.value.date || new Date().toISOString()).slice(0, 10),
+          clientName: colis.value.expediteur || colis.value.destinataire || "Client colis",
+          customerId: colis.value.customerId || "",
+          clientAddress: colis.value.adresse || "",
+          clientPhone: colis.value.telephoneExpediteur || colis.value.telephoneDestinataire || "",
+          totalTtc: Number(colis.value.prix || 0),
+          paymentStatus: colis.value.statut || "À payer",
+          entrepriseId: entrepriseId.value,
+          enlevementId: colis.value.id || id.value,
+          createdAt: new Date().toISOString()
+        })
+      }
+    } catch (saveError) {
+      console.error("Erreur sauvegarde facture:", saveError)
+      toast("PDF généré, mais sauvegarde refusée par Firebase. Déployez les règles factures.", { type: "warning", autoClose: 3500 })
+    }
   } catch (error) {
     console.error(error)
     toast("Erreur génération facture", { type: "error", autoClose: 1500 })

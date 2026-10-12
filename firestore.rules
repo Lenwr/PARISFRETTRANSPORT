@@ -105,6 +105,15 @@ service cloud.firestore {
       allow create: if canCreateEntrepriseResource();
     }
 
+    match /factures/{docId} {
+      allow read, update, delete: if canReadOrWriteEntrepriseResource();
+      allow create: if canCreateEntrepriseResource();
+    }
+
+    match /customerCounters/{docId} {
+      allow read, write: if canCreateEntrepriseResource() || canReadOrWriteEntrepriseResource();
+    }
+
     match /catalogueArticles/{docId} {
       allow read, update, delete: if canReadOrWriteEntrepriseResource();
       allow create: if canCreateEntrepriseResource();

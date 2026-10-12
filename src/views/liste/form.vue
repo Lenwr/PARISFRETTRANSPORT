@@ -65,6 +65,7 @@ const defaultDestinations = [...destinations.value]
 const customDestination = ref("")
 const loading = ref(false)
 const catalogueArticles = ref([])
+const conteneurs = ref([])
 
 const emptyColis = () => ({
   nom: "",
@@ -100,6 +101,7 @@ const form = ref({
   resteAPayer: "",
   modeDePaiement: "Espèces",
   poidsTotal: "",
+  conteneurId: "",
 
   colis: [emptyColis()]
 })
@@ -308,6 +310,12 @@ async function fetchCatalogue() {
   }
 }
 
+async function fetchConteneurs() {
+  if (!entrepriseId.value) return
+  const snap = await getDocs(query(collection(db, "chargements"), where("entrepriseId", "==", entrepriseId.value)))
+  conteneurs.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+}
+
 function applyCatalogue(item) {
   const article = catalogueArticles.value.find(article =>
     article.nom.trim().toLowerCase() === String(item.nom || "").trim().toLowerCase()
@@ -355,7 +363,7 @@ function buildColis() {
       coli: `${item.nom} ${i + 1}/${quantite}`,
       statutColis: "En attente",
       poids: poidsUnitaire,
-      voyageId: ""
+      voyageId: form.value.conteneurId || ""
     }))
 
     return {
@@ -374,6 +382,7 @@ function buildColis() {
       totalLigne: Number(totalLigne(item).toFixed(2)),
       poids: poidsUnitaire,
       poidsTotal,
+      conteneurId: form.value.conteneurId || "",
       details
     }
   })
@@ -492,6 +501,7 @@ async function submit() {
 
 onMounted(() => {
   fetchCatalogue()
+  fetchConteneurs()
   fetchDestinations()
 })
 </script>
@@ -562,6 +572,13 @@ onMounted(() => {
               <option value="" disabled>Choisir une destination</option>
               <option v-for="destination in destinations" :key="destination" :value="destination">
                 {{ destination }}
+              </option>
+            </select>
+
+            <select v-model="form.conteneurId" class="select select-bordered rounded-2xl">
+              <option value="">Aucun conteneur (facultatif)</option>
+              <option v-for="conteneur in conteneurs" :key="conteneur.id" :value="conteneur.id">
+                {{ conteneur.contenaire || conteneur.numeroVol || conteneur.id }}
               </option>
             </select>
 
