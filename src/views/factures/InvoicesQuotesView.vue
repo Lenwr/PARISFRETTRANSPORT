@@ -425,6 +425,11 @@ function closeInvoicePreview() {
   if (invoicePreviewUrl.value) URL.revokeObjectURL(invoicePreviewUrl.value)
   invoicePreviewUrl.value = ""
 }
+
+function openPdfInNewTab() {
+  if (!invoicePreviewUrl.value) return
+  window.open(invoicePreviewUrl.value, "_blank", "noopener,noreferrer")
+}
 </script>
 
 <template>
@@ -458,7 +463,8 @@ function closeInvoicePreview() {
         <div v-if="invoicePreviewUrl" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
           <iframe :src="invoicePreviewUrl" title="Aperçu de la facture PDF" class="h-[620px] w-full bg-white"></iframe>
         </div>
-        <div v-if="invoicePreviewUrl" class="mt-5 flex justify-end gap-2">
+        <div v-if="invoicePreviewUrl" class="mt-5 flex flex-wrap justify-end gap-2">
+          <button type="button" class="btn btn-outline" @click="openPdfInNewTab">Ouvrir le PDF</button>
           <a :href="invoicePreviewUrl" :download="`${selectedInvoice.number}.pdf`" class="btn btn-primary gap-2" v-if="invoicePreviewUrl">
             <Download class="h-4 w-4" /> Télécharger le PDF
           </a>
