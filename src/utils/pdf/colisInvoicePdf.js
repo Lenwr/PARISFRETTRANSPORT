@@ -144,7 +144,7 @@ function invoiceLines(colis) {
   return items
 }
 
-export async function generateColisInvoicePdf({ colis, entreprise }) {
+export async function generateColisInvoicePdf({ colis, entreprise, download = true }) {
   const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true })
   const logoUrl = resolveCompanyLogo(entreprise)
   const logo = await imageUrlToBase64(logoUrl)
@@ -270,5 +270,6 @@ export async function generateColisInvoicePdf({ colis, entreprise }) {
   pdf.setTextColor(...MUTED)
   pdf.text("Toute modification rend ce document non conforme aux données du colis.", 105, 282, { align: "center" })
 
-  pdf.save(`facture-${fileNamePart(colis.numero || colis.id)}.pdf`)
+  if (download) pdf.save(`facture-${fileNamePart(colis.numero || colis.id)}.pdf`)
+  return pdf
 }

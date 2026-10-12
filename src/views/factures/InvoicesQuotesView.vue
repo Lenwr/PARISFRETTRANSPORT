@@ -1,6 +1,6 @@
 <script setup>
 import { resolveCompanyLogo } from "../../branding"
-import { computed, reactive, ref, onMounted } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore"
 import { useFirestore } from "vuefire"
@@ -8,6 +8,8 @@ import jsPDF from "jspdf"
 import { Download, FileText, Plus, Receipt, Trash2 } from "lucide-vue-next"
 import { toast } from "vue3-toastify"
 import { useAuthStore } from "../../stores/useAuthStore"
+import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
+import { generateColisInvoicePdf } from "../../utils/pdf/colisInvoicePdf"
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -16,7 +18,8 @@ const savedDocuments = ref([])
 const loadingDocuments = ref(false)
 const invoiceSearch = ref("")
 const selectedInvoice = ref(null)
-const entrepriseId = computed(() => authStore.entreprise?.id || authStore.userProfile?.entrepriseId)
+const invoicePreviewUrl = ref("")
+const entrepriseId = computed(() => authStore.entreprise?.id || authStore.userProfile?.entrepriseId || PARIS_FRET_ENTREPRISE_ID)
 const clientFilter = computed(() => String(route.query.client || '').trim().toLowerCase())
 const visibleDocuments = computed(() => savedDocuments.value.filter(item => {
   const matchesClient = !clientFilter.value || String(item.clientName || '').trim().toLowerCase() === clientFilter.value
@@ -46,10 +49,14 @@ async function loadDocuments() {
         customerId: data.customerId || "",
         totalTtc: Number(data.prix || 0),
         paymentStatus: data.statut || "À payer",
-        legacyShipment: true
+        legacyShipment: true,
+        sourceShipment: { id: item.id, ...data }
       })
     })
     savedDocuments.value = invoices.sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")))
+  } catch (error) {
+    console.error("Erreur chargement factures:", error)
+    toast("Impossible de charger la liste des factures", { type: "error", autoClose: 2500 })
   } finally { loadingDocuments.value = false }
 }
 
@@ -204,7 +211,7 @@ function drawSectionTitle(doc, title, x, y) {
   doc.text(title, x, y)
 }
 
-async function generateDocumentPdf() {
+async function generateDocumentPdf(mode = "download") {
   if (!documentForm.clientName.trim()) {
     toast("Nom du client requis", { type: "warning", autoClose: 1500 })
     return
@@ -344,6 +351,12 @@ async function generateDocumentPdf() {
   doc.setTextColor(100, 116, 139)
   drawText(doc, `Document généré par ${company.value.name}.`, 14, 286)
 
+  if (mode === "preview") {
+    if (invoicePreviewUrl.value) URL.revokeObjectURL(invoicePreviewUrl.value)
+    invoicePreviewUrl.value = URL.createObjectURL(doc.output("blob"))
+    return
+  }
+
   doc.save(fileName)
   const saved = {
     type: documentForm.type,
@@ -353,6 +366,15 @@ async function generateDocumentPdf() {
     clientName: documentForm.clientName,
     totalTtc: Number(totalTtc.value.toFixed(2)),
     paymentStatus: documentForm.paymentStatus,
+    paymentMethod: documentForm.paymentMethod,
+    clientAddress: documentForm.clientAddress,
+    clientEmail: documentForm.clientEmail,
+    clientPhone: documentForm.clientPhone,
+    notes: documentForm.notes,
+    discountType: documentForm.discountType,
+    discount: Number(documentForm.discount || 0),
+    vatRate: Number(documentForm.vatRate || 0),
+    lines: documentForm.lines.map(line => ({ ...line })),
     entrepriseId: entrepriseId.value,
     createdAt: new Date().toISOString()
   }
@@ -361,10 +383,47 @@ async function generateDocumentPdf() {
   toast(`${title.toLowerCase()} généré`, { type: "success", autoClose: 1200 })
 }
 
-onMounted(loadDocuments)
+watch(entrepriseId, loadDocuments, { immediate: true })
 
-function openInvoicePreview(invoice) {
+async function openInvoicePreview(invoice) {
   selectedInvoice.value = invoice
+  if (invoice.legacyShipment) {
+    const pdf = await generateColisInvoicePdf({
+      colis: {
+        ...(invoice.sourceShipment || {}),
+        numero: invoice.number,
+        prix: invoice.totalTtc,
+        date: invoice.date,
+        expediteur: invoice.clientName
+      },
+      entreprise: company.value,
+      download: false
+    })
+    if (invoicePreviewUrl.value) URL.revokeObjectURL(invoicePreviewUrl.value)
+    invoicePreviewUrl.value = URL.createObjectURL(pdf.output("blob"))
+    return
+  }
+  if (!invoice.lines?.length) {
+    invoicePreviewUrl.value = ""
+    return
+  }
+
+  const original = JSON.parse(JSON.stringify(documentForm))
+  Object.assign(documentForm, {
+    ...invoice,
+    lines: invoice.lines.map(line => ({ ...line }))
+  })
+  try {
+    await generateDocumentPdf("preview")
+  } finally {
+    Object.assign(documentForm, original)
+  }
+}
+
+function closeInvoicePreview() {
+  selectedInvoice.value = null
+  if (invoicePreviewUrl.value) URL.revokeObjectURL(invoicePreviewUrl.value)
+  invoicePreviewUrl.value = ""
 }
 </script>
 
@@ -387,7 +446,7 @@ function openInvoicePreview(invoice) {
 
     <dialog class="modal" :class="{ 'modal-open': selectedInvoice }">
       <div v-if="selectedInvoice" class="modal-box rounded-2xl">
-        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" @click="selectedInvoice = null">✕</button>
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" @click="closeInvoicePreview">✕</button>
         <p class="text-sm font-bold text-primary">Aperçu {{ selectedInvoice.type === 'devis' ? 'du devis' : 'de la facture' }}</p>
         <h2 class="mt-2 text-2xl font-black text-slate-950">{{ selectedInvoice.number }}</h2>
         <div class="mt-6 grid gap-3 sm:grid-cols-2">
@@ -396,9 +455,16 @@ function openInvoicePreview(invoice) {
           <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase text-slate-400">Montant TTC</p><p class="mt-1 text-xl font-black text-primary">{{ currency(selectedInvoice.totalTtc) }}</p></div>
           <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase text-slate-400">Statut</p><p class="mt-1 font-black">{{ selectedInvoice.paymentStatus || '-' }}</p></div>
         </div>
-        <p v-if="selectedInvoice.legacyShipment" class="mt-5 text-xs text-amber-700">Facture issue d’un colis existant. Générez le PDF depuis la fiche du colis.</p>
+        <div v-if="invoicePreviewUrl" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+          <iframe :src="invoicePreviewUrl" title="Aperçu de la facture PDF" class="h-[620px] w-full bg-white"></iframe>
+        </div>
+        <div v-if="invoicePreviewUrl" class="mt-5 flex justify-end gap-2">
+          <a :href="invoicePreviewUrl" :download="`${selectedInvoice.number}.pdf`" class="btn btn-primary gap-2" v-if="invoicePreviewUrl">
+            <Download class="h-4 w-4" /> Télécharger le PDF
+          </a>
+        </div>
       </div>
-      <form method="dialog" class="modal-backdrop"><button @click="selectedInvoice = null">close</button></form>
+      <form method="dialog" class="modal-backdrop"><button @click="closeInvoicePreview">close</button></form>
     </dialog>
     <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <p class="text-sm font-bold text-primary">Factures</p>
