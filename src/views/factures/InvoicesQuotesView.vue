@@ -15,6 +15,7 @@ const db = useFirestore()
 const savedDocuments = ref([])
 const loadingDocuments = ref(false)
 const invoiceSearch = ref("")
+const selectedInvoice = ref(null)
 const entrepriseId = computed(() => authStore.entreprise?.id || authStore.userProfile?.entrepriseId)
 const clientFilter = computed(() => String(route.query.client || '').trim().toLowerCase())
 const visibleDocuments = computed(() => savedDocuments.value.filter(item => {
@@ -361,6 +362,10 @@ async function generateDocumentPdf() {
 }
 
 onMounted(loadDocuments)
+
+function openInvoicePreview(invoice) {
+  selectedInvoice.value = invoice
+}
 </script>
 
 <template>
@@ -375,10 +380,26 @@ onMounted(loadDocuments)
       <div v-else-if="!visibleDocuments.length" class="py-6 text-sm text-slate-500">Aucune facture enregistrée pour ce client.</div>
       <div v-else class="mt-4 overflow-x-auto">
         <table class="table w-full"><thead><tr><th>Type</th><th>Numéro</th><th>Client</th><th>Date</th><th>Total TTC</th><th>Statut</th></tr></thead>
-          <tbody><tr v-for="item in visibleDocuments" :key="item.id"><td class="font-bold">{{ item.type === 'devis' ? 'Devis' : 'Facture' }}</td><td>{{ item.number }}</td><td>{{ item.clientName }}</td><td>{{ item.date || '-' }}</td><td>{{ currency(item.totalTtc) }}</td><td>{{ item.paymentStatus || '-' }}</td></tr></tbody>
+          <tbody><tr v-for="item in visibleDocuments" :key="item.id" class="cursor-pointer hover:bg-slate-50" @click="openInvoicePreview(item)"><td class="font-bold">{{ item.type === 'devis' ? 'Devis' : 'Facture' }}</td><td>{{ item.number }}</td><td>{{ item.clientName }}</td><td>{{ item.date || '-' }}</td><td>{{ currency(item.totalTtc) }}</td><td>{{ item.paymentStatus || '-' }}</td></tr></tbody>
         </table>
       </div>
     </div>
+
+    <dialog class="modal" :class="{ 'modal-open': selectedInvoice }">
+      <div v-if="selectedInvoice" class="modal-box rounded-2xl">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" @click="selectedInvoice = null">✕</button>
+        <p class="text-sm font-bold text-primary">Aperçu {{ selectedInvoice.type === 'devis' ? 'du devis' : 'de la facture' }}</p>
+        <h2 class="mt-2 text-2xl font-black text-slate-950">{{ selectedInvoice.number }}</h2>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase text-slate-400">Client</p><p class="mt-1 font-black">{{ selectedInvoice.clientName || '-' }}</p></div>
+          <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase text-slate-400">Date</p><p class="mt-1 font-black">{{ selectedInvoice.date || '-' }}</p></div>
+          <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase text-slate-400">Montant TTC</p><p class="mt-1 text-xl font-black text-primary">{{ currency(selectedInvoice.totalTtc) }}</p></div>
+          <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase text-slate-400">Statut</p><p class="mt-1 font-black">{{ selectedInvoice.paymentStatus || '-' }}</p></div>
+        </div>
+        <p v-if="selectedInvoice.legacyShipment" class="mt-5 text-xs text-amber-700">Facture issue d’un colis existant. Générez le PDF depuis la fiche du colis.</p>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button @click="selectedInvoice = null">close</button></form>
+    </dialog>
     <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <p class="text-sm font-bold text-primary">Factures</p>
       <div class="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
