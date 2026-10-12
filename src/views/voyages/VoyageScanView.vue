@@ -7,7 +7,7 @@ import {
   collection,
   doc,
   getDoc,
-  updateDoc
+  runTransaction
 } from "firebase/firestore"
 
 import {
@@ -23,6 +23,8 @@ import {
 } from "lucide-vue-next"
 
 import { toast } from "vue3-toastify"
+import { useAuthStore } from "../../stores/useAuthStore"
+import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
 
 const route = useRoute()
 const router = useRouter()
@@ -35,9 +37,9 @@ const loading = ref(false)
 const scanned = ref([])
 const isRedirecting = ref(false)
 
-const datas = useCollection(
-  collection(db, "enlevements")
-)
+const authStore = useAuthStore()
+const entrepriseId = computed(() => authStore.entreprise?.id || authStore.userProfile?.entrepriseId || PARIS_FRET_ENTREPRISE_ID)
+const manualCode = ref("")
 
 function onLoaded() {
   console.log("scanner loaded")
@@ -145,119 +147,42 @@ function parseQrCode(text) {
 }
 
 async function attachPackageToVoyage(parsed) {
-
   try {
-
-    const enlevement =
-      datas.value.find(
-        item => item.id === parsed.enlevementId
-      )
-
-    if (!enlevement) {
-
-      toast("Colis introuvable", {
-        type: "error"
-      })
-
-      return
-
-    }
-
-    const colis =
-      JSON.parse(
-        JSON.stringify(
-          enlevement.colis || []
-        )
-      )
-
-    // QR principal
-    if (
-      parsed.colisIndex === null ||
-      parsed.detailIndex === null
-    ) {
-
-      colis.forEach(item => {
-
-        ;(item.details || []).forEach(detail => {
-
-          detail.voyageId = voyageId
-          detail.statutColis = "Attribué au vol"
-
-        })
-
-      })
-
-    } else {
-
-      const detail =
-        colis?.[parsed.colisIndex]
-          ?.details?.[parsed.detailIndex]
-
-      if (!detail) {
-
-        toast("Détail colis introuvable", {
-          type: "error"
-        })
-
-        return
-
+    await runTransaction(db, async transaction => {
+      const container = await transaction.get(doc(db, "chargements", voyageId))
+      const reference = doc(db, "enlevements", parsed.enlevementId)
+      const snapshot = await transaction.get(reference)
+      const data = snapshot.data()
+      if (!container.exists() || container.data().entrepriseId !== entrepriseId.value || !data || data.entrepriseId !== entrepriseId.value) {
+        throw new Error("Conteneur ou colis inaccessible")
       }
-
-      // Déjà ajouté
-      if (detail.voyageId === voyageId) {
-
-        toast("Colis déjà ajouté", {
-          type: "warning"
-        })
-
-        return
-
+      const colis = data.colis || []
+      const details = parsed.colisIndex === null
+        ? colis.flatMap(group => group.details || [])
+        : [colis[parsed.colisIndex]?.details?.[parsed.detailIndex]].filter(Boolean)
+      if (!details.length) throw new Error("Colis introuvable")
+      if (details.some(detail => detail.voyageId && detail.voyageId !== voyageId)) {
+        throw new Error("Un colis est déjà affecté à un autre conteneur")
       }
-
-      detail.voyageId = voyageId
-      detail.statutColis = "Attribué au vol"
-
-    }
-
-    await updateDoc(
-      doc(db, "enlevements", parsed.enlevementId),
-      {
-        colis,
-        updatedAt: new Date()
+      if (details.every(detail => detail.voyageId === voyageId)) throw new Error("Colis déjà ajouté")
+      for (const detail of details) {
+        detail.voyageId = voyageId
+        detail.statutColis = "Chargé dans le conteneur"
       }
-    )
-
+      transaction.update(reference, { colis, updatedAt: new Date() })
+    })
     scanned.value.unshift({
-
-      id:
-        parsed.packageId ||
-        `${parsed.enlevementId}-${Date.now()}`,
-
-      enlevementId:
-        parsed.enlevementId,
-
-      date:
-        new Date().toLocaleTimeString(),
-
-      status:
-        "Ajouté au voyage"
-
+      id: parsed.enlevementId + "-" + Date.now(),
+      enlevementId: parsed.enlevementId,
+      date: new Date().toLocaleTimeString(),
+      status: "Ajouté au conteneur"
     })
-
-    toast("Colis ajouté au voyage", {
-      type: "success"
-    })
-
+    manualCode.value = ""
+    toast("Colis ajouté au conteneur", { type: "success" })
   } catch (error) {
-
     console.error(error)
-
-    toast("Erreur scan", {
-      type: "error"
-    })
-
+    toast(error.message || "Erreur scan", { type: "error" })
   }
-
 }
 
 async function onDecode(text) {
@@ -311,7 +236,7 @@ async function onDecode(text) {
       <div>
 
         <p class="scanner-label">
-          Voyage
+          Conteneur
         </p>
 
         <h1 class="scanner-title">
@@ -342,6 +267,10 @@ async function onDecode(text) {
     <!-- BOTTOM -->
 
     <div class="scanner-bottom">
+      <form class="mb-4 flex gap-2" @submit.prevent="onDecode(manualCode)">
+        <input v-model="manualCode" class="input input-bordered min-w-0 flex-1" aria-label="Code du colis" placeholder="Code du colis" required />
+        <button class="btn btn-primary" :disabled="loading">Ajouter</button>
+      </form>
 
       <div class="scanner-bottom-header">
 

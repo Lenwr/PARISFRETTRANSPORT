@@ -43,7 +43,7 @@ async function submit() {
         <div class="max-w-2xl text-white">
           <p class="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">Espace privé</p>
           <h1 class="mt-5 text-5xl font-black leading-[0.98] tracking-[-0.055em] xl:text-7xl">
-            Clients, colis et départs au même endroit.
+            Clients, colis et conteneurs au même endroit.
           </h1>
           <p class="mt-7 max-w-lg text-lg leading-8 text-white/70">
             Votre outil quotidien pour enregistrer, scanner, suivre et informer vos clients.

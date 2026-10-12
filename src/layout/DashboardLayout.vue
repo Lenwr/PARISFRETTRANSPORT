@@ -52,7 +52,7 @@ const navLinks = [
   { to: "/suivi-clients", icon: MessageCircle, label: "Suivi clients" },
   { to: "/demandes", icon: Bell, label: "Demandes" },
   { to: "/livraisons/scan", icon: ScanLine, label: "Scan livraison" },
-  { to: "/recording", icon: Truck, label: "Départs" },
+  { to: "/recording", icon: Truck, label: "Conteneurs" },
   { to: "/planing", icon: CalendarDays, label: "Planning", superAdminOnly: true },
   { to: "/factures", icon: FileText, label: "Factures" },
   { to: "/tools", icon: Calculator, label: "Outils" },
@@ -338,7 +338,7 @@ onBeforeUnmount(() => {
               {{ entrepriseNom }}
             </p>
             <p class="hidden text-xs font-semibold text-slate-500 sm:block">
-              Clients, colis et départs
+              Clients, colis et conteneurs
             </p>
           </div>
         </div>

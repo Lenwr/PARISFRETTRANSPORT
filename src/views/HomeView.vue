@@ -174,8 +174,8 @@ const actions = [
     icon: Users
   },
   {
-    title: "Préparer un chargement",
-    description: "Assembler les colis attribués à un voyage ou conteneur.",
+    title: "Charger un conteneur",
+    description: "Assembler les colis attribués à un conteneur.",
     to: "/recording",
     icon: Truck
   }

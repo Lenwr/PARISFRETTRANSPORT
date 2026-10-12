@@ -7,6 +7,10 @@ import { toast } from "vue3-toastify"
 import { useAuthStore } from "../../stores/useAuthStore"
 import { firebaseApp } from "../../components/firebaseConfig"
 import { PARIS_FRET_ENTREPRISE_ID } from "../../appConfig"
+import { jsPDF } from "jspdf"
+import { Download, Trash2 } from "lucide-vue-next"
+import { confirmToast } from "../../utils/notifications"
+import { runTransaction } from "firebase/firestore"
 
 const db = useFirestore()
 const route = useRoute()
@@ -24,6 +28,59 @@ const chargement = ref(null)
 const enlevements = ref([])
 const loading = ref(true)
 const sendingSMS = ref(false)
+const removing = ref(false)
+const packageSearch = ref("")
+const filteredPackages = computed(() => {
+  const search = packageSearch.value.trim().toLocaleLowerCase("fr")
+  return colisDuVoyage.value.filter(item => [item.nom, item.numero, item.expediteur, item.destinataire].some(value => String(value).toLocaleLowerCase("fr").includes(search)))
+})
+
+async function removePackage(item) {
+  if (removing.value) return
+  if (!await confirmToast({ title: "Retirer ce colis du conteneur ?", message: item.nom, confirmText: "Retirer", danger: true })) return
+  removing.value = true
+  try {
+    await runTransaction(db, async transaction => {
+      const reference = doc(db, "enlevements", item.enlevementId)
+      const snapshot = await transaction.get(reference)
+      const data = snapshot.data()
+      if (!data || data.entrepriseId !== entrepriseId.value) throw new Error("Colis inaccessible")
+      const detail = data.colis?.[item.colisIndex]?.details?.[item.detailIndex]
+      if (!detail || detail.voyageId !== chargementId) throw new Error("Affectation modifiée")
+      delete detail.voyageId
+      detail.statutColis = "En attente"
+      transaction.update(reference, { colis: data.colis, updatedAt: new Date() })
+    })
+    await fetchData()
+    toast("Colis retiré du conteneur", { type: "success" })
+  } catch (error) {
+    console.error(error)
+    toast("Impossible de retirer le colis", { type: "error" })
+  } finally {
+    removing.value = false
+  }
+}
+
+function exportPackingList() {
+  const pdf = new jsPDF()
+  const title = chargement.value?.contenaire || chargement.value?.numeroVol || "Conteneur"
+  pdf.setFontSize(16)
+  pdf.text(pdf.splitTextToSize("Liste de colisage - " + title, 180), 14, 20)
+  let y = 42
+  pdf.setFontSize(10)
+  for (const item of colisDuVoyage.value) {
+    const lines = pdf.splitTextToSize([item.numero, item.nom, item.expediteur + " > " + item.destinataire, item.destination, item.poids + " kg"].join(" | "), 180)
+    for (const line of lines) {
+      if (y > 275) { pdf.addPage(); y = 20 }
+      pdf.text(line, 14, y)
+      y += 6
+    }
+    y += 4
+  }
+  if (y > 270) { pdf.addPage(); y = 20 }
+  pdf.text(colisDuVoyage.value.length + " colis - " + totalPoids.value + " kg", 14, y + 6)
+  pdf.save("colisage-" + chargementId + ".pdf")
+}
 
 const selectedStatus = ref("En transit")
 
@@ -32,7 +89,7 @@ const customMessage = ref(
 )
 
 const statusOptions = [
-  "Attribué au vol",
+  "Chargé dans le conteneur",
   "En transit",
   "Arrivé destination",
   "Disponible retrait",
@@ -169,6 +226,11 @@ async function updateAllColisStatus() {
       )
     )
 
+    await updateDoc(doc(db, "chargements", chargementId), {
+      status: selectedStatus.value,
+      updatedAt: new Date()
+    })
+
     toast("Statut mis à jour", { type: "success" })
     await fetchData()
   } catch (error) {
@@ -259,10 +321,10 @@ onMounted(fetchData)
     <div class="mx-auto max-w-6xl space-y-5">
       <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p class="text-xs font-bold uppercase text-primary">Voyage</p>
+          <p class="text-xs font-bold uppercase text-primary">Conteneur</p>
 
           <h1 class="text-2xl font-black text-slate-900 md:text-3xl">
-            {{ chargement?.numeroVol || chargement?.contenaire || "Détail chargement" }}
+            {{ chargement?.contenaire || chargement?.numeroVol || "Détail chargement" }}
           </h1>
 
           <p class="text-sm text-slate-500">
@@ -274,7 +336,7 @@ onMounted(fetchData)
           class="btn btn-primary w-full rounded-2xl md:w-auto"
           @click="router.push(`/voyage/${chargementId}/scan`)"
         >
-          Scanner colis du vol
+          Scanner les colis
         </button>
       </div>
 
@@ -368,7 +430,7 @@ onMounted(fetchData)
         <div class="rounded-3xl bg-white p-4 shadow-sm md:p-6">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-black text-slate-900 md:text-2xl">
-              Colis attribués au voyage
+              Liste de colisage
             </h2>
 
             <span class="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white">
@@ -380,10 +442,14 @@ onMounted(fetchData)
             v-if="colisDuVoyage.length === 0"
             class="py-10 text-center text-slate-500"
           >
-            Aucun colis ajouté à ce voyage.
+            Aucun colis ajouté à ce conteneur.
           </div>
 
-          <div v-else class="hidden overflow-x-auto md:block">
+          <div class="mb-4 flex flex-wrap gap-3">
+            <input v-model="packageSearch" aria-label="Rechercher un colis" placeholder="Rechercher un colis" class="input input-bordered min-w-0 flex-1" />
+            <button class="btn btn-primary" :disabled="!colisDuVoyage.length" @click="exportPackingList"><Download class="h-4 w-4" />Liste PDF</button>
+          </div>
+          <div class="hidden overflow-x-auto md:block">
             <table class="table">
               <thead>
                 <tr>
@@ -394,12 +460,13 @@ onMounted(fetchData)
                   <th>Poids</th>
                   <th>Numéro</th>
                   <th>Statut</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
                 <tr
-                  v-for="item in colisDuVoyage"
+                  v-for="item in filteredPackages"
                   :key="`${item.enlevementId}-${item.colisIndex}-${item.detailIndex}`"
                 >
                   <td class="font-bold">{{ item.nom }}</td>
@@ -413,6 +480,7 @@ onMounted(fetchData)
                       {{ item.statutColis }}
                     </span>
                   </td>
+                  <td><button class="btn btn-ghost btn-square text-red-600" title="Retirer du conteneur" aria-label="Retirer du conteneur" :disabled="removing" @click="removePackage(item)"><Trash2 class="h-4 w-4" /></button></td>
                 </tr>
               </tbody>
             </table>
@@ -420,7 +488,7 @@ onMounted(fetchData)
 
           <div class="space-y-3 md:hidden">
             <div
-              v-for="item in colisDuVoyage"
+              v-for="item in filteredPackages"
               :key="`${item.enlevementId}-${item.colisIndex}-${item.detailIndex}`"
               class="rounded-2xl border border-slate-100 bg-slate-50 p-4"
             >
@@ -440,6 +508,7 @@ onMounted(fetchData)
                 <p><strong>Destination :</strong> {{ item.destination }}</p>
                 <p><strong>Poids :</strong> {{ item.poids }} kg</p>
                 <p class="break-all"><strong>Numéro :</strong> {{ item.numero }}</p>
+                <button class="btn btn-ghost text-red-600" :disabled="removing" @click="removePackage(item)"><Trash2 class="h-4 w-4" />Retirer du conteneur</button>
               </div>
             </div>
           </div>
